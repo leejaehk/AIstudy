@@ -1,0 +1,449 @@
+/* AI 스터디메이트 - 화면 스타일
+   tkinter 버전의 색과 배치를 그대로 옮기되, 폰 화면에 맞춰 늘어나도록 함 */
+
+:root {
+  --bg-top: #1e1b4b;
+  --bg-bottom: #7c3aed;
+  --accent-light: #a78bfa;
+  --page-bg: #f5f3ff;
+  --card-line: #e9e5fb;
+  --ink: #1f2937;
+  --ink-soft: #7c7594;
+  --ink-deep: #312e81;
+  --shadow: 0 6px 20px rgba(76, 29, 149, .08);
+}
+
+* { box-sizing: border-box; }
+
+/* hidden 속성이 display 를 가진 규칙에 밀리지 않게.
+   (이게 없으면 .btn-done{display:block} 같은 규칙 때문에 숨긴 요소가 계속 보인다) */
+[hidden] { display: none !important; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #ded7f5;
+  color: var(--ink);
+  font-family: "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR",
+               system-ui, sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* 폰 크기 기준으로 만들고, PC에서는 가운데 정렬 */
+.phone {
+  position: relative;
+  width: 100%;
+  max-width: 460px;
+  min-height: 100dvh;
+  margin: 0 auto;
+  overflow: hidden;
+  background: var(--page-bg);
+}
+
+@media (min-width: 560px) {
+  .phone {
+    min-height: min(880px, 100dvh);
+    margin: max(0px, calc((100dvh - 880px) / 2)) auto;
+    border-radius: 22px;
+    box-shadow: 0 18px 50px rgba(30, 27, 75, .28);
+  }
+}
+
+/* 화면 전환 */
+.screen { display: none; min-height: 100dvh; }
+.screen.active { display: block; }
+
+@media (min-width: 560px) {
+  .screen { min-height: min(880px, 100dvh); }
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+/* ── 표지 ─────────────────────────────────────────────── */
+
+/* display 는 .screen.active 가 정하므로 여기서 건드리지 않는다.
+   (.splash 에 display 를 두면 .screen{display:none} 을 덮어써서
+    표지가 다른 화면 위에 계속 남는다) */
+.splash.active {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.splash {
+  position: relative;
+  padding: 0 28px calc(34px + env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, var(--bg-top), var(--bg-bottom));
+  overflow: hidden;
+}
+
+/* tkinter 에서 손으로 계산해 그리던 은은한 원 — CSS 로는 blur 한 줄 */
+.blob {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .10);
+  filter: blur(6px);
+  pointer-events: none;
+}
+.blob-a { width: 230px; height: 230px; left: -60px; top: 12%; }
+.blob-b { width: 200px; height: 200px; right: -50px; top: 4%; }
+.blob-c { width: 220px; height: 220px; right: -20px; bottom: 2%; }
+
+.splash-body {
+  position: relative;
+  margin-top: auto;
+  text-align: center;
+}
+
+.logo {
+  position: relative;
+  width: 112px;
+  height: 112px;
+  margin: 0 auto 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 34px;
+  background: #4c1d95;
+  box-shadow: 0 0 0 8px #fff;
+}
+.logo span { font-size: 40px; font-weight: 700; color: #fff; letter-spacing: 1px; }
+.sparkle {
+  position: absolute;
+  top: -14px; right: -14px;
+  font-style: normal;
+  font-size: 22px;
+  color: var(--accent-light);
+}
+
+.splash-title {
+  margin: 0 0 10px;
+  font-size: 30px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -.5px;
+}
+.splash-tagline { margin: 0 0 22px; font-size: 14px; color: #ddd6fe; }
+.splash-sub { margin: 0; font-size: 12.5px; color: #c4b5fd; }
+
+.splash-foot { position: relative; margin-top: auto; text-align: center; }
+
+.btn-start {
+  width: 100%;
+  max-width: 300px;
+  padding: 18px 0;
+  border-radius: 30px;
+  background: #fff;
+  color: #4c1d95;
+  font-size: 16px;
+  font-weight: 700;
+  transition: transform .12s, background .12s;
+}
+.btn-start:hover { background: #ede9fe; }
+.btn-start:active { transform: scale(.97); }
+
+.version { margin: 18px 0 0; font-size: 11px; color: #b9a7f5; }
+
+/* ── 홈 ───────────────────────────────────────────────── */
+
+.home-header {
+  position: relative;
+  padding: calc(46px + env(safe-area-inset-top)) 26px 74px;
+  background: linear-gradient(180deg, var(--bg-top), #6d28d9);
+}
+.greeting { margin: 0 0 8px; font-size: 12.5px; color: #ddd6fe; }
+.home-title { margin: 0; font-size: 21px; font-weight: 700; color: #fff; }
+
+.avatar {
+  position: absolute;
+  top: calc(44px + env(safe-area-inset-top));
+  right: 26px;
+  width: 46px; height: 46px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  background: #4c1d95;
+  border: 2px solid var(--accent-light);
+  color: #fff; font-size: 14px; font-weight: 700;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid var(--card-line);
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+}
+
+.summary {
+  position: relative;
+  margin: -42px 24px 0;
+  padding: 18px 20px 20px;
+}
+.summary-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+#summary-label { font-size: 13px; font-weight: 700; color: var(--ink-deep); }
+#summary-count { font-size: 12px; font-weight: 700; color: #7c3aed; white-space: nowrap; }
+.summary.empty #summary-count { color: #a89ec9; }
+
+.bar { height: 10px; border-radius: 5px; background: #ede9fe; overflow: hidden; }
+.bar-fill {
+  height: 100%;
+  width: 0;
+  border-radius: 5px;
+  background: #7c3aed;
+  transition: width .35s ease;
+}
+
+.section-label {
+  margin: 26px 0 12px 28px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink-deep);
+}
+
+.menu { list-style: none; margin: 0; padding: 0 24px; display: grid; gap: 14px; }
+
+.menu-card {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 18px;
+  text-align: left;
+  transition: border-color .15s, box-shadow .15s, transform .12s;
+}
+.menu-card:hover { border-color: var(--accent); box-shadow: 0 8px 22px rgba(76, 29, 149, .13); }
+.menu-card:active { transform: scale(.985); }
+
+.chip {
+  flex: none;
+  width: 54px; height: 54px;
+  display: grid; place-items: center;
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--accent) 15%, #fff);
+  color: var(--accent);
+}
+.icon {
+  width: 26px; height: 26px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.menu-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.menu-text strong { font-size: 15.5px; font-weight: 700; color: var(--ink); }
+.menu-text small { font-size: 12px; color: var(--ink-soft); }
+
+.chev { margin-left: auto; font-size: 22px; color: #c9c1e8; }
+.menu-card:hover .chev { color: var(--accent); }
+
+.foot-note {
+  margin: 26px 0 calc(26px + env(safe-area-inset-bottom));
+  text-align: center;
+  font-size: 11.5px;
+  color: #9b8ec9;
+}
+
+/* ── 상세 ─────────────────────────────────────────────── */
+
+#detail { background: var(--page-bg); }
+
+.detail-header {
+  padding: calc(38px + env(safe-area-inset-top)) 26px 34px;
+  background: linear-gradient(180deg,
+              color-mix(in srgb, var(--accent, #7c3aed) 62%, #000),
+              var(--accent, #7c3aed));
+}
+.back { font-size: 13px; font-weight: 700; color: #fff; padding: 4px 0; }
+.detail-header h2 { margin: 22px 0 0; font-size: 23px; font-weight: 700; color: #fff; }
+
+.detail-card { margin: 26px 24px 0; padding: 34px 24px; text-align: center; }
+.detail-name { margin: 0 0 14px; font-size: 16px; font-weight: 700; color: var(--ink-deep); }
+.detail-hint { margin: 0; font-size: 13px; line-height: 1.7; color: var(--ink-soft); }
+.detail-hint code {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.head-note {
+  margin: 10px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, .9);
+}
+
+/* ── 학습 계획 ────────────────────────────────────────── */
+
+.panel { padding-bottom: calc(30px + env(safe-area-inset-bottom)); }
+
+.add-card {
+  margin: -18px 24px 0;
+  padding: 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.add-card input,
+.exam-body input {
+  width: 100%;
+  padding: 13px 14px;
+  border: 1px solid var(--card-line);
+  border-radius: 12px;
+  background: #fbfaff;
+  font-size: 15px;
+  color: var(--ink);
+}
+.add-card input:focus,
+.exam-body input:focus {
+  outline: none;
+  border-color: var(--accent, #7c3aed);
+  background: #fff;
+}
+
+.add-row { display: flex; align-items: center; gap: 8px; }
+.add-row input { flex: 1; min-width: 0; }
+.time-row .tilde { flex: none; color: var(--ink-soft); font-size: 15px; }
+
+.btn-add {
+  padding: 14px 0;
+  border-radius: 12px;
+  background: var(--accent, #7c3aed);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+}
+.btn-add:active { transform: scale(.97); }
+
+.plan-list { list-style: none; margin: 16px 0 0; padding: 0 24px; display: grid; gap: 10px; }
+
+/* 완료한 것들을 구분하는 제목 */
+.group {
+  margin: 14px 2px 2px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #a9a2c0;
+}
+
+.plan-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 14px 14px 16px;
+  background: #fff;
+  border: 1px solid var(--card-line);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+}
+
+/* 체크 버튼 — 폰에서 누르기 쉽도록 넉넉하게 */
+.check {
+  flex: none;
+  width: 26px; height: 26px;
+  display: grid; place-items: center;
+  border: 2px solid #cfc7ea;
+  border-radius: 9px;
+  color: transparent;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+  transition: background .15s, border-color .15s, color .15s;
+}
+.plan-item.done .check {
+  background: var(--accent, #7c3aed);
+  border-color: var(--accent, #7c3aed);
+  color: #fff;
+}
+
+.plan-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.plan-body .text {
+  font-size: 15px;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.plan-item.done .plan-body .text { color: #a9a2c0; text-decoration: line-through; }
+
+.plan-body .when {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent, #7c3aed);
+  font-variant-numeric: tabular-nums;
+}
+.plan-item.done .plan-body .when { color: #b8b1cc; }
+
+.del {
+  flex: none;
+  width: 34px; height: 34px;
+  border-radius: 10px;
+  color: #c2bbd8;
+  font-size: 20px;
+  line-height: 1;
+}
+.del:hover { background: #fff1f2; color: #f43f5e; }
+
+.empty-note {
+  margin: 40px 24px;
+  text-align: center;
+  font-size: 13.5px;
+  line-height: 1.8;
+  color: #9b8ec9;
+}
+
+.exam-card { margin: 22px 24px 0; padding: 0; overflow: hidden; }
+.exam-card summary {
+  padding: 16px 18px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink-deep);
+  cursor: pointer;
+}
+.exam-body { padding: 0 18px 18px; display: grid; gap: 10px; }
+
+.btn-sub {
+  padding: 12px 0;
+  border-radius: 12px;
+  background: #ede9fe;
+  color: #5b21b6;
+  font-size: 14px;
+  font-weight: 700;
+}
+.btn-sub:active { transform: scale(.98); }
+
+.plan-msg {
+  margin: 16px 24px 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fff1f2;
+  color: #be123c;
+  font-size: 13px;
+  text-align: center;
+}
+
+.btn-done {
+  display: block;
+  width: calc(100% - 48px);
+  margin: 26px 24px;
+  padding: 18px 0;
+  border-radius: 30px;
+  background: var(--accent, #7c3aed);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  transition: transform .12s, filter .12s;
+}
+.btn-done:hover { filter: brightness(1.07); }
+.btn-done:active { transform: scale(.98); }
+.btn-done[disabled] { opacity: .55; cursor: default; transform: none; }
