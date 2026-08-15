@@ -8,10 +8,10 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="{{ app_name }}">
 <title>{{ app_name }}</title>
-<link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
-<link rel="apple-touch-icon" href="{{ url_for('static', filename='icon-192.png') }}">
-<link rel="icon" href="{{ url_for('static', filename='icon-192.png') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<link rel="manifest" href="{{ asset('manifest.json') }}">
+<link rel="apple-touch-icon" href="{{ asset('icon-192.png') }}">
+<link rel="icon" href="{{ asset('icon-192.png') }}">
+<link rel="stylesheet" href="{{ asset('style.css') }}">
 </head>
 <body>
 
@@ -49,25 +49,174 @@
     </div>
 
     <div class="splash-foot">
+      <div class="view-pick" role="group" aria-label="화면 크기">
+        <button type="button" class="view-btn" data-view="phone">폰으로 보기</button>
+        <button type="button" class="view-btn" data-view="wide">PC로 보기</button>
+      </div>
       <button class="btn-start" data-go="home">시작하기</button>
       <p class="version">{{ version }}</p>
     </div>
   </section>
 
+  <!-- ── 계정 만들기 ─────────────────────────────────────── -->
+  <section id="signup" class="screen auth">
+    <header class="auth-head">
+      <button type="button" class="back auth-back" data-go="">‹&nbsp; 뒤로</button>
+      <h2>계정 만들기</h2>
+      <p>계획과 기록을 이 계정에 저장합니다.</p>
+    </header>
+
+    <form class="card auth-card" id="signup-form">
+      <label class="field">
+        <span>이름</span>
+        <input id="su-name" type="text" maxlength="20" required
+               autocomplete="name" placeholder="화면에 표시될 이름">
+      </label>
+      <label class="field">
+        <span>생년월일</span>
+        <input id="su-birth" type="date" required>
+      </label>
+      <div class="field">
+        <span>학교 · 학년</span>
+        <div class="add-row">
+          <select id="su-level" required>
+            <option value="">학교</option>
+            {% for lv in levels %}
+            <option value="{{ lv.key }}">{{ lv.name }}</option>
+            {% endfor %}
+          </select>
+          <select id="su-grade" required>
+            <option value="">학년</option>
+          </select>
+        </div>
+      </div>
+      <label class="field">
+        <span>아이디</span>
+        <input id="su-id" type="text" maxlength="20" required
+               autocomplete="username" placeholder="로그인할 때 쓸 아이디 (2~20자)">
+      </label>
+      <label class="field">
+        <span>비밀번호</span>
+        <input id="su-pw" type="password" required
+               autocomplete="new-password" placeholder="6자 이상">
+      </label>
+      <label class="field">
+        <span>비밀번호 확인</span>
+        <input id="su-pw2" type="password" required
+               autocomplete="new-password" placeholder="한 번 더">
+      </label>
+
+      <label class="keep">
+        <input id="su-keep" type="checkbox" checked>
+        <span>로그인 유지</span>
+      </label>
+
+      <button class="btn-auth" type="submit">계정 만들기</button>
+      <p class="auth-msg" id="su-msg" hidden></p>
+    </form>
+
+    <p class="auth-switch">이미 계정이 있나요?
+      <button type="button" data-go="login">로그인</button></p>
+  </section>
+
+  <!-- ── 로그인 ─────────────────────────────────────────── -->
+  <section id="login" class="screen auth">
+    <header class="auth-head">
+      <button type="button" class="back auth-back" data-go="">‹&nbsp; 뒤로</button>
+      <h2>로그인</h2>
+      <p>돌아오셨네요. 이어서 공부해요.</p>
+    </header>
+
+    <form class="card auth-card" id="login-form">
+      <label class="field">
+        <span>아이디</span>
+        <input id="li-id" type="text" maxlength="20" required
+               autocomplete="username">
+      </label>
+      <label class="field">
+        <span>비밀번호</span>
+        <input id="li-pw" type="password" required
+               autocomplete="current-password">
+      </label>
+
+      <label class="keep">
+        <input id="li-keep" type="checkbox" checked>
+        <span>로그인 유지</span>
+      </label>
+
+      <button class="btn-auth" type="submit">로그인</button>
+      <p class="auth-msg" id="li-msg" hidden></p>
+    </form>
+
+    <p class="auth-switch">계정이 없나요?
+      <button type="button" data-go="signup">계정 만들기</button></p>
+    <p class="auth-switch small">
+      <button type="button" data-go="reset">비밀번호를 잊으셨나요?</button></p>
+  </section>
+
+  <!-- ── 비밀번호 재설정 ────────────────────────────────── -->
+  <section id="reset" class="screen auth">
+    <header class="auth-head">
+      <button type="button" class="back auth-back" data-go="login">‹&nbsp; 뒤로</button>
+      <h2>비밀번호 재설정</h2>
+      <p>가입할 때 적은 생년월일로 본인 확인을 합니다.</p>
+    </header>
+
+    <form class="card auth-card" id="reset-form">
+      <label class="field">
+        <span>아이디</span>
+        <input id="rs-id" type="text" maxlength="20" required
+               autocomplete="username">
+      </label>
+      <label class="field">
+        <span>생년월일</span>
+        <input id="rs-birth" type="date" required>
+      </label>
+      <label class="field">
+        <span>새 비밀번호</span>
+        <input id="rs-pw" type="password" required
+               autocomplete="new-password" placeholder="6자 이상">
+      </label>
+      <label class="field">
+        <span>새 비밀번호 확인</span>
+        <input id="rs-pw2" type="password" required
+               autocomplete="new-password" placeholder="한 번 더">
+      </label>
+
+      <label class="keep">
+        <input id="rs-keep" type="checkbox" checked>
+        <span>로그인 유지</span>
+      </label>
+
+      <button class="btn-auth" type="submit">비밀번호 바꾸기</button>
+      <p class="auth-msg" id="rs-msg" hidden></p>
+      <p class="auth-hint">저장된 비밀번호는 암호화되어 있어 알려드릴 수 없습니다.
+        대신 새로 정하는 방식입니다.</p>
+    </form>
+  </section>
+
   <!-- ── 홈 ─────────────────────────────────────────────── -->
   <section id="home" class="screen">
     <header class="home-header">
-      <p class="greeting">안녕하세요, 공부하는 사람님</p>
+      <p class="greeting">안녕하세요, <span id="who">공부하는 사람</span>님
+        <button type="button" class="school-chip" id="school-chip" hidden></button>
+      </p>
       <h2 class="home-title">오늘은 무엇을 공부할까요?</h2>
       <div class="avatar">AI</div>
     </header>
 
-    <div class="summary card">
-      <div class="summary-top">
-        <span id="summary-label">오늘 사용횟수</span>
-        <span id="summary-count">– / –</span>
+    <form class="card school-edit" id="school-form" hidden>
+      <div class="add-row">
+        <select id="me-level"></select>
+        <select id="me-grade"></select>
+        <button class="btn-add" type="submit">저장</button>
       </div>
-      <div class="bar"><div class="bar-fill" id="bar-fill"></div></div>
+      <p class="plan-msg" id="school-msg" hidden></p>
+    </form>
+
+    <div class="summary card clock-card">
+      <p class="clock-date" id="clock-date">–</p>
+      <p class="clock-time" id="clock-time">–</p>
     </div>
 
     <h3 class="section-label">학습 메뉴</h3>
@@ -90,6 +239,24 @@
     </ul>
 
     <p class="foot-note">카드를 눌러 학습을 시작하세요</p>
+
+    <div class="home-actions">
+      <button type="button" class="link-btn" id="switch-view">PC로 보기</button>
+      <span class="dot">·</span>
+      <button type="button" class="link-btn" id="logout">로그아웃</button>
+      <span class="dot">·</span>
+      <button type="button" class="link-btn danger" id="quit">앱 종료</button>
+    </div>
+  </section>
+
+  <!-- ── 종료됨 ─────────────────────────────────────────── -->
+  <section id="bye" class="screen bye">
+    <div class="bye-box">
+      <p class="bye-mark">✓</p>
+      <h2>앱을 종료했습니다</h2>
+      <p>이 창은 닫으셔도 됩니다.<br>
+        다시 쓰려면 <b>웹앱 실행.bat</b> 을 실행하세요.</p>
+    </div>
   </section>
 
   <!-- ── 상세 (카드를 눌렀을 때) ─────────────────────────── -->
@@ -99,6 +266,7 @@
       <h2 id="detail-title">제목</h2>
       <p class="head-note" id="dday" hidden></p>
       <p class="head-note" id="ask-count" hidden></p>
+      <p class="head-note" id="quiz-left" hidden></p>
     </header>
 
     <!-- 학습 계획 화면 -->
@@ -134,6 +302,119 @@
       <p class="plan-msg" id="plan-msg" hidden></p>
     </div>
 
+    <!-- 문제 풀기 -->
+    <div class="panel" id="panel-quiz" hidden>
+
+      <!-- 과목 고르기 -->
+      <div id="quiz-subjects">
+        <h3 class="section-label">과목을 고르세요
+          <button type="button" class="link-btn" id="edit-subjects">과목 편집</button>
+        </h3>
+        <ul class="subject-list" id="subject-list"></ul>
+
+        <!-- 과목 편집 -->
+        <div id="subject-edit" hidden>
+          <ul class="subject-list" id="subject-edit-list"></ul>
+
+          <form class="card add-card" id="subject-form">
+            <input id="sub-name" type="text" maxlength="20"
+                   placeholder="새 과목 이름 (예: 물리학)" autocomplete="off">
+            <div class="add-row">
+              <input id="sub-limit" type="number" min="0" max="999"
+                     placeholder="하루 횟수 (0 = 무제한)">
+              <button class="btn-add" type="submit">추가</button>
+            </div>
+            <p class="auth-hint">과학이 물리학·화학으로 나뉘는 것처럼, 과목은
+              사람마다 다릅니다. 잘 모르겠는 문제는 <b>기타</b>에 넣었다가
+              나중에 옮기면 됩니다.</p>
+          </form>
+
+          <p class="plan-msg" id="subject-msg" hidden></p>
+          <button class="btn-sub done-edit" id="done-subjects" type="button">
+            편집 끝내기</button>
+        </div>
+      </div>
+
+      <!-- 목록 / 문제 추가 -->
+      <div id="quiz-home" hidden>
+        <button class="back subject-back" id="quiz-back" type="button">‹&nbsp; 과목 선택</button>
+
+        <div class="card quiz-top">
+          <p class="quiz-count" id="quiz-count">문제 0개</p>
+          <button class="btn-add" id="quiz-start" type="button">풀기 시작</button>
+        </div>
+
+        <details class="card add-quiz" id="quiz-add-box">
+          <summary>문제 추가</summary>
+          <form class="exam-body" id="quiz-form">
+            <input id="q-question" type="text" maxlength="300" required
+                   placeholder="문제 (예: 3의 제곱은?)" autocomplete="off">
+            <input id="q-answer" type="text" maxlength="300" required
+                   placeholder="정답 (예: 9)" autocomplete="off">
+            <input id="q-note" type="text" maxlength="300"
+                   placeholder="해설 (선택)" autocomplete="off">
+            <label class="tiny-label">주된 과목 (다른 과목이 섞였을 때)
+              <select id="q-main"></select>
+            </label>
+            <button class="btn-sub" type="submit">추가</button>
+          </form>
+        </details>
+
+        <ul class="quiz-list" id="quiz-list"></ul>
+        <p class="empty-note" id="quiz-empty" hidden>
+          아직 문제가 없어요.<br>위에서 문제를 추가해 보세요.
+        </p>
+      </div>
+
+      <!-- 풀이 중 -->
+      <div id="quiz-play" hidden>
+        <p class="play-step" id="play-step">1 / 3</p>
+
+        <div class="card play-card">
+          <p class="play-q" id="play-q">문제</p>
+          <input id="play-input" type="text" maxlength="300"
+                 placeholder="정답을 입력하세요" autocomplete="off">
+          <div class="play-result" id="play-result" hidden></div>
+        </div>
+
+        <button class="btn-done" id="play-check">채점하기</button>
+        <button class="btn-sub play-quit" id="play-quit" type="button">그만두기</button>
+      </div>
+
+      <p class="plan-msg" id="quiz-msg" hidden></p>
+    </div>
+
+    <!-- 오답 노트 -->
+    <div class="panel" id="panel-wrong" hidden>
+      <div class="card quiz-top">
+        <p class="quiz-count" id="wrong-count">틀린 문제 0개</p>
+        <button class="btn-add" id="wrong-start" type="button">다시 풀기</button>
+      </div>
+
+      <ul class="quiz-list" id="wrong-list"></ul>
+      <p class="empty-note" id="wrong-empty" hidden>
+        틀린 문제가 없어요.<br>문제 풀기에서 틀리면 여기에 모입니다.
+      </p>
+    </div>
+
+    <!-- AI에게 질문 -->
+    <div class="panel" id="panel-ask" hidden>
+      <form class="card ask-card" id="ask-form">
+        <!-- required 를 두면 브라우저 기본 경고가 떠서, 안내는 앱에서 한다 -->
+        <textarea id="ask-text" maxlength="500" rows="4"
+                  placeholder="무엇이 궁금한가요?"></textarea>
+        <button class="btn-add" type="submit">질문하기</button>
+      </form>
+
+      <p class="plan-msg" id="ask-msg" hidden></p>
+
+      <h3 class="section-label">보낸 질문</h3>
+      <ul class="quiz-list" id="ask-list"></ul>
+      <p class="empty-note" id="ask-empty" hidden>
+        아직 보낸 질문이 없어요.<br>위에 적어서 보내 보세요.
+      </p>
+    </div>
+
     <!-- 아직 만들지 않은 카드 -->
     <div class="panel" id="panel-todo" hidden>
       <div class="card detail-card">
@@ -147,6 +428,6 @@
 
 </div>
 
-<script src="{{ url_for('static', filename='app.js') }}"></script>
+<script src="{{ asset('app.js') }}"></script>
 </body>
 </html>

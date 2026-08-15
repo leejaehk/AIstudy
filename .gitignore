@@ -1,7 +1,15 @@
 # 개인 학습 기록 — 사람마다 다르고 공개할 내용이 아님
 web/usage.json
 web/plans.json
+web/quiz.json
+web/subjects.json
 web/progress.json
+
+# 계정 정보와 쿠키 서명 열쇠 — 절대 올리면 안 됨
+web/users.json
+web/admins.json
+web/asks.json
+web/secret.key
 
 # 파이썬
 __pycache__/
