@@ -9,6 +9,8 @@ web/progress.json
 web/users.json
 web/admins.json
 web/asks.json
+web/payments.json
+web/stats.json
 web/secret.key
 
 # 파이썬

@@ -2,9 +2,20 @@
 
 const $ = (sel) => document.querySelector(sel);
 
+/* 화면에 없는 자리에 손을 대도 멈추지 않게. 예전 화면(HTML)이 브라우저에
+   남아 있을 때 스크립트 전체가 죽는 것을 막는다. */
+function on(sel, event, handler) {
+  const el = $(sel);
+  if (el) el.addEventListener(event, handler);
+  return el;
+}
+
 /* 앱 전체가 함께 보는 값 — 아래 코드보다 먼저 선언해야 한다 */
 let me = { user: null, has_users: false };   // 지금 로그인한 사람
 let quitting = false;                        // 앱 종료를 눌렀는지
+let billing = { plans: [], orders: [] };     // 결제 화면이 보는 값
+let pickedPlan = null;                       // 결제 화면에서 고른 기간
+let memberDays = 30;                         // 관리자가 회원을 켤 때 기본 기간
 
 /* ── 서버와 주고받기 ───────────────────────────────────── */
 
@@ -51,6 +62,32 @@ function render() {
   let id = 'splash';
   if (head === 'signup' || head === 'login' || head === 'reset') {
     id = head;
+  } else if (head === 'account') {
+    if (!me.user) {
+      location.replace(`#${me.has_users ? 'login' : 'signup'}`);
+      return;
+    }
+    id = 'account';
+    openAccount();
+  } else if (head === 'billing') {
+    if (!me.user) {
+      location.replace(`#${me.has_users ? 'login' : 'signup'}`);
+      return;
+    }
+    id = 'billing';
+    loadBilling();
+  } else if (head === 'admin') {
+    // 관리자만 볼 수 있는 화면. 아니면 조용히 홈으로 돌려보낸다.
+    if (!me.user) {
+      location.replace(`#${me.has_users ? 'login' : 'signup'}`);
+      return;
+    }
+    if (!me.admin) {
+      location.replace('#home');
+      return;
+    }
+    id = 'admin';
+    loadAccounts();
   } else if (card || head === 'home') {
     // 로그인해야 볼 수 있는 화면 — 안 했으면 계정 화면으로 보낸다
     if (!me.user) {
@@ -68,6 +105,9 @@ function render() {
   if (id === 'home') {
     $('#who').textContent = me.name || me.user;
     renderSchoolChip();
+    renderTierChip();
+    renderBillEntry();
+    $('#admin-entry').hidden = !me.admin;
     loadUsage();
   }
 }
@@ -87,6 +127,8 @@ async function start() {
   } catch (err) {
     me = { user: null, has_users: false };
   }
+  applyTheme(me.theme);
+  applyDark(me.dark);
   render();
 }
 
@@ -147,6 +189,8 @@ async function submitAuth(path, body, msgBox, button) {
   try {
     me = await api(path, 'POST', body);
     me.has_users = true;
+    applyTheme(me.theme);        // 로그인한 사람이 고른 색으로
+    applyDark(me.dark);
     go('home');
   } catch (err) {
     authError(msgBox, err.message);
@@ -196,6 +240,8 @@ $('#logout').addEventListener('click', async () => {
     // 서버에 못 닿아도 화면에서는 로그아웃한 것으로 둔다
   }
   me = { user: null, has_users: true };
+  applyTheme(DEFAULT_THEME);   // 다음 사람을 위해 기본 색으로
+  applyDark(DEFAULT_DARK);
   document.querySelectorAll('.auth-card input').forEach((i) => {
     if (i.type !== 'checkbox') i.value = '';
   });
@@ -338,8 +384,8 @@ function renderAsks(items) {
 }
 
 function renderAskCount() {
-  const used = usage.counts.ask || 0;
-  const limit = (usage.limits || {}).ask;
+  const used = usage.ask_used || 0;
+  const limit = usage.ask_limit;      // 회원·관리자는 null (무제한)
   const el = $('#ask-count');
 
   el.textContent = usage.unlimited
@@ -477,6 +523,15 @@ function renderQuizLeft() {
   if ($('#panel-quiz').hidden || !currentSubject) { el.hidden = true; return; }
 
   const info = subjectInfo(currentSubject);
+  if (!usage.unlimited && info.own_limit !== info.limit) {
+    // 스스로 크게 잡아 두었지만 비회원이라 조여진 경우
+    el.textContent = info.left
+      ? `오늘 ${info.left}번 더 풀 수 있어요 (${info.used} / ${info.limit})`
+        + ' · 회원이 되면 무제한'
+      : `오늘은 다 풀었어요 (${info.used} / ${info.limit}) · 회원이 되면 무제한`;
+    el.hidden = false;
+    return;
+  }
   if (usage.unlimited) {
     el.textContent = `오늘 ${info.used}번 풀었어요 · 무제한`;
   } else if (info.left === 0) {
@@ -486,6 +541,126 @@ function renderQuizLeft() {
   }
   el.hidden = false;
 }
+
+/* 문제 추가 칸에 오늘 만들 수 있는 횟수 */
+function renderMakeLeft() {
+  const el = $('#make-left');
+  const btn = $('#quiz-form .btn-sub');
+  renderBulkLeft();
+  const used = usage.make_used || 0;
+  const limit = usage.make_limit;     // 회원·관리자는 null (무제한)
+
+  if (limit == null) {
+    el.textContent = used
+      ? `오늘 ${used}개 만들었어요 · 만드는 건 제한이 없어요`
+      : '문제는 얼마든지 만들 수 있어요';
+    el.hidden = false;
+    btn.disabled = false;
+    btn.textContent = '추가';
+    return;
+  }
+  const left = Math.max(0, limit - used);
+  el.textContent = left
+    ? `오늘 ${left}개 더 만들 수 있어요 (${used} / ${limit})`
+    : `오늘은 다 만들었어요 (${used} / ${limit}) · 회원이 되면 무제한`;
+  el.hidden = false;
+  btn.disabled = !left;
+  btn.textContent = left ? '추가' : '오늘 몫을 다 썼어요';
+}
+
+/* 여러 개 한 번에 넣을 때 남은 몫 */
+function renderBulkLeft() {
+  const el = $('#bulk-left');
+  const btn = $('#bulk-add');
+  if (!el || !btn) return;
+  const limit = usage.make_limit;
+  if (limit == null) {
+    el.textContent = '넣는 개수에 제한이 없어요 (한 번에 100줄까지)';
+    el.hidden = false;
+    btn.disabled = false;
+    return;
+  }
+  const left = Math.max(0, limit - (usage.make_used || 0));
+  el.textContent = left
+    ? `오늘 ${left}개까지 넣을 수 있어요 — 넘는 줄은 남겨 둘게요`
+    : `오늘 몫을 다 썼어요 (${usage.make_used} / ${limit})`;
+  el.hidden = false;
+  btn.disabled = !left;
+}
+
+/* 홈 — 내 등급과 남은 기간 */
+function renderTierChip() {
+  const chip = $('#tier-chip');
+  if (me.admin) {
+    chip.textContent = '관리자';
+    chip.className = 'tier-chip admin';
+  } else if (me.member) {
+    const left = leftLabel(me.member_left);
+    chip.textContent = left ? `회원 · ${left}` : '회원';
+    chip.className = 'tier-chip member';
+  } else {
+    chip.textContent = me.member_until ? '비회원 · 기간 지남' : '비회원';
+    chip.className = 'tier-chip guest';
+  }
+  chip.hidden = false;
+}
+
+/* 문제 넣는 방법 고르기 — 하나씩 / 여러 개 한 번에 */
+document.querySelectorAll('.add-tab').forEach((tab) => {
+  tab.addEventListener('click', () => {
+    const many = tab.dataset.add === 'many';
+    document.querySelectorAll('.add-tab').forEach((t) =>
+      t.classList.toggle('on', t === tab));
+    $('#quiz-form').hidden = many;
+    $('#bulk-form').hidden = !many;
+    renderMakeLeft();
+  });
+});
+
+function bulkReport(data) {
+  const msg = $('#bulk-msg');
+  const bad = $('#bulk-bad');
+  bad.textContent = '';
+
+  const guessed = Object.entries(data.guessed_counts || {})
+    .map(([name, n]) => `${name} ${n}개`).join(', ');
+  showMsg(msg, data.added
+    ? `${data.added}개를 넣었어요`
+      + (guessed ? ` · 과목을 짐작했어요 (${guessed})` : '')
+    : '넣은 문제가 없어요');
+
+  (data.skipped || []).forEach((row) => {
+    const li = document.createElement('li');
+    li.textContent = (row.line ? `${row.line}번째 줄 — ` : '')
+      + `${row.text} → ${row.why}`;
+    bad.appendChild(li);
+  });
+  bad.hidden = !(data.skipped || []).length;
+}
+
+on('#bulk-form', 'submit', async (e) => {
+  e.preventDefault();
+  const box = $('#bulk-text');
+  const btn = $('#bulk-add');
+  if (!box.value.trim()) {
+    showMsg($('#bulk-msg'), '넣을 문제를 적어 주세요');
+    return;
+  }
+  btn.disabled = true;
+  try {
+    const data = await api('/api/quiz/bulk', 'POST',
+                           { subject: currentSubject, text: box.value });
+    quizData = data;
+    if (data.usage) usage = data.usage;
+    if (data.added) box.value = '';     // 넣은 것만 지운다
+    bulkReport(data);
+    renderQuiz();
+  } catch (err) {
+    showMsg($('#bulk-msg'), err.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 function quizLimitReached() {
   return currentSubject ? subjectFull(currentSubject) : false;
@@ -497,10 +672,11 @@ function showMsg(box, message) {
 }
 
 function renderQuiz() {
-  const { items, wrong } = quizData;
+  const { items } = quizData;
   const full = quizLimitReached();
   renderSubjects();
   renderQuizLeft();
+  renderMakeLeft();
 
   if (currentSubject) fillSubjectSelect($('#q-main'), '', '이 과목 그대로');
   $('#quiz-count').textContent = `문제 ${items.length}개`;
@@ -509,13 +685,100 @@ function renderQuiz() {
   $('#quiz-empty').hidden = items.length > 0;
   fillList($('#quiz-list'), items, true);
 
-  const wrongUsable = wrong.filter(itemUsable);
-  $('#wrong-count').textContent = `틀린 문제 ${wrong.length}개`;
-  $('#wrong-start').disabled = wrongUsable.length === 0;
-  $('#wrong-start').textContent =
-    wrong.length && !wrongUsable.length ? '오늘 다 씀' : '다시 풀기';
-  $('#wrong-empty').hidden = wrong.length > 0;
+  renderReview();
+}
+
+function daysUntil(day) {
+  if (!day) return 0;
+  const then = new Date(`${day}T00:00:00`);
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  return Math.round((then - now) / 86400000);
+}
+
+/* 다음 복습일을 사람이 읽는 말로 */
+function dueLabel(item) {
+  const n = item.due_in;
+  if (n <= 0) return '오늘 복습';
+  if (n === 1) return '내일 복습';
+  return `${n}일 뒤 복습`;
+}
+
+/* 오답 노트 위쪽 — 오늘 복습할 것 */
+let wrongFilter = '';       // 오답 노트에서 보고 있는 과목 ('' = 전체)
+
+/* 오답 노트 과목 고르기 — 과목이 섞여 있으면 찾기 어렵다 */
+function renderWrongFilter(wrong) {
+  const box = $('#wrong-filter');
+  box.textContent = '';
+
+  const counts = {};
+  wrong.forEach((w) => {
+    const key = w.main || w.subject;
+    counts[key] = (counts[key] || 0) + 1;
+  });
+  const keys = Object.keys(counts);
+  box.hidden = keys.length < 2;         // 과목이 하나뿐이면 고를 것이 없다
+  if (box.hidden) {
+    wrongFilter = '';
+    return;
+  }
+  if (wrongFilter && !counts[wrongFilter]) wrongFilter = '';   // 다 지워진 과목
+
+  const add = (key, label, n) => {
+    const li = document.createElement('li');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'chip-btn' + (wrongFilter === key ? ' on' : '');
+    btn.textContent = `${label} ${n}`;
+    btn.addEventListener('click', () => {
+      wrongFilter = key;
+      renderReview();
+    });
+    li.appendChild(btn);
+    box.appendChild(li);
+  };
+
+  add('', '전체', wrong.length);
+  keys.sort((a, b) => counts[b] - counts[a])
+      .forEach((k) => add(k, SUBJECT_NAMES[k] || '지운 과목', counts[k]));
+}
+
+function filterWrong(list) {
+  if (!wrongFilter) return list;
+  return list.filter((w) => (w.main || w.subject) === wrongFilter);
+}
+
+function renderReview() {
+  const all = quizData.wrong || [];
+  renderWrongFilter(all);
+  const wrong = filterWrong(all);
+  const due = filterWrong((quizData.review || {}).due || []);
+  const 이과목 = wrongFilter ? `${SUBJECT_NAMES[wrongFilter] || ''} ` : '';
+
+  $('#review-count').textContent = due.length
+    ? `오늘 복습할 ${이과목}문제 ${due.length}개`
+    : `오늘 복습할 ${이과목}문제가 없어요`;
+  $('#review-sub').textContent = due.length
+    ? '복습은 하루 횟수를 쓰지 않아요'
+    : (wrong.length ? '다음 복습일까지 기다리거나, 아래에서 전부 다시 풀 수 있어요'
+                    : '틀린 문제가 없어요');
+  $('#review-start').disabled = due.length === 0;
+  $('#review-start').textContent = due.length ? '복습 시작' : '복습 없음';
+
+  $('#wrong-count').textContent = wrongFilter
+    ? `${SUBJECT_NAMES[wrongFilter] || ''} ${wrong.length}개 / 전체 ${all.length}개`
+    : `틀린 문제 ${all.length}개`;
+  $('#wrong-start').hidden = wrong.length === 0;
+  $('#wrong-empty').hidden = all.length > 0;
   fillList($('#wrong-list'), wrong, false);
+
+  const hint = $('#review-hint');
+  const steps = ((quizData.review || {}).steps || []).join('일 · ');
+  hint.textContent = all.length
+    ? `맞힐 때마다 ${steps}일 뒤로 멀어지고, 끝까지 맞히면 오답 노트에서 빠집니다`
+    : '';
+  hint.hidden = !all.length;
 }
 
 function fillList(list, items, withStat) {
@@ -545,6 +808,16 @@ function fillList(list, items, withStat) {
       n.className = 'n';
       n.textContent = item.note;
       body.appendChild(n);
+    }
+    if (!withStat && item.wrong) {          // 오답 노트 — 복습 상태
+      const r = document.createElement('span');
+      r.className = 'r' + (item.due_today ? ' now' : '');
+      r.textContent = [
+        dueLabel(item),
+        `복습 ${item.stage} / ${item.steps}`,
+        item.misses > 1 ? `${item.misses}번 틀림` : null,
+      ].filter(Boolean).join(' · ');
+      body.appendChild(r);
     }
     if (withStat) {
       const pick = document.createElement('select');
@@ -685,6 +958,26 @@ async function checkAnswer() {
       who.textContent = `${res.charged.name} 횟수 1회 사용`;
       box.appendChild(who);
     }
+    if (res.plan_done) {
+      const p = document.createElement('p');
+      p.className = 'note';
+      p.textContent = `계획 '${res.plan_done}' 을(를) 해냈어요`;
+      box.appendChild(p);
+    }
+    if (res.review) {          // 복습으로 푼 문제 — 다음에 언제 볼지 알려 준다
+      const next = document.createElement('p');
+      next.className = 'note';
+      if (res.graduated) {
+        next.textContent = '다 외웠어요! 오답 노트에서 빠집니다';
+      } else if (res.correct) {
+        const days = daysUntil(res.due);
+        next.textContent = `복습 ${res.stage} / ${res.steps} · `
+          + (days > 0 ? `${days}일 뒤에 다시 볼게요` : '오늘 다시 볼게요');
+      } else {
+        next.textContent = '복습을 처음부터 다시 해요 (횟수는 안 써요)';
+      }
+      box.appendChild(next);
+    }
     if (res.note) {
       const note = document.createElement('p');
       note.className = 'note';
@@ -724,26 +1017,33 @@ function finishQuiz() {
   renderQuiz();
 }
 
-function startQuizIfAllowed(items) {
-  // 오늘 한도를 다 쓴 과목의 문제는 빼고 푼다
-  const usable = items.filter(itemUsable);
+function startQuizIfAllowed(items, review) {
+  // 오늘 한도를 다 쓴 과목의 문제는 빼고 푼다.
+  // 복습은 횟수를 쓰지 않으므로 거르지 않는다.
+  const usable = review ? items : items.filter(itemUsable);
   if (!usable.length) {
     showMsg($('#quiz-msg'), '오늘은 다 풀었어요. 내일 다시 시도해 주세요');
     return;
   }
-  showMsg($('#quiz-msg'), '');
+  showMsg($('#quiz-msg'), review
+    ? '복습은 오늘 횟수에 들어가지 않아요'
+    : '');
   startQuiz(usable);
 }
 
 $('#play-quit').addEventListener('click', finishQuiz);
 $('#quiz-start').addEventListener('click', () => startQuizIfAllowed(quizData.items));
-$('#wrong-start').addEventListener('click', () => {
+function startReview(items) {
   // 오답은 과목이 섞여 있으므로, 문제 풀기 화면에서 그대로 이어 푼다
-  const wrong = quizData.wrong.slice();
+  const list = items.slice();
   currentSubject = null;
   go('quiz');
-  setTimeout(() => startQuizIfAllowed(wrong), 60);
-});
+  setTimeout(() => startQuizIfAllowed(list, true), 60);
+}
+
+on('#review-start', 'click', () =>
+  startReview(filterWrong((quizData.review || {}).due || [])));
+on('#wrong-start', 'click', () => startReview(filterWrong(quizData.wrong || [])));
 
 /* ── 학습 계획 ─────────────────────────────────────────── */
 
@@ -755,15 +1055,188 @@ function showPlanError(message) {
 
 async function loadPlans() {
   try {
+    // 계획에 과목을 붙이려면 과목 목록이 있어야 한다 (문제 풀기를 아직 안
+    // 열었으면 비어 있으므로 여기서 한 번 받아 둔다)
+    if (!mySubjects.length) {
+      const subs = await api('/api/subjects');
+      rememberSubjects(subs.items);
+      if (subs.usage) usage = subs.usage;
+    }
     renderPlans(await api('/api/plans'));
     showPlanError('');
   } catch (err) {
     showPlanError('계획을 불러오지 못했어요. 서버가 켜져 있는지 확인해 주세요.');
   }
+  loadStats();
 }
 
-function renderPlans({ exam, items }) {
+/* ── 시험까지 계획 짜 주기 ─────────────────────────────────
+   약한 과목(정답률이 낮고 오답이 많은 과목)에 시간을 더 준다. 시험일까지
+   되풀이되는 시간표를 만들고, 시험이 지나면 저절로 사라진다.        */
+
+on('#auto-make', 'click', async (e) => {
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  try {
+    const data = await api('/api/plans/auto', 'POST', {
+      minutes: Number($('#auto-minutes').value),
+      start: $('#auto-start').value || '19:00',
+      repeat: $('#auto-repeat').value,
+    });
+    renderPlans(data);
+    const 몫 = (data.made || [])
+      .map((m) => `${m.name} ${m.minutes}분`).join(' · ');
+    showMsg($('#auto-msg'),
+            `시험까지 ${data.days_left}일 — ${몫} 로 짰어요`);
+  } catch (err) {
+    showMsg($('#auto-msg'), err.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+on('#auto-clear', 'click', async () => {
+  if (!confirm('자동으로 짠 계획을 지울까요? 직접 적은 계획은 그대로 둡니다.')) {
+    return;
+  }
+  try {
+    const data = await api('/api/plans/auto', 'DELETE');
+    renderPlans(data);
+    showMsg($('#auto-msg'), data.removed
+      ? `${data.removed}개를 지웠어요` : '지울 것이 없었어요');
+  } catch (err) {
+    showMsg($('#auto-msg'), err.message);
+  }
+});
+
+/* ── 공부 기록 ─────────────────────────────────────────────
+   학습 계획 화면 아래에 함께 둔다. 계획을 세우는 자리에서 지난 기록을
+   보는 것이 자연스럽기 때문.                                    */
+
+function statTile(label, value, unit) {
+  const box = document.createElement('div');
+  box.className = 'tile';
+  const n = document.createElement('strong');
+  n.textContent = value;
+  if (unit) {
+    const u = document.createElement('small');
+    u.textContent = unit;
+    n.appendChild(u);
+  }
+  box.appendChild(n);
+  const l = document.createElement('span');
+  l.textContent = label;
+  box.appendChild(l);
+  return box;
+}
+
+function renderStatToday(data) {
+  const row = $('#stat-today');
+  row.textContent = '';
+  const t = data.today;
+  [['오늘 푼 문제', t.solved, '개'],
+   ['맞힌 문제', t.correct, '개'],
+   ['복습', t.reviewed, '개'],
+   ['해낸 계획', t.planned, '개']].forEach(([label, v, unit]) =>
+    row.appendChild(statTile(label, v, unit)));
+
+  const streak = $('#stat-streak');
+  streak.textContent = data.streak > 1
+    ? `${data.streak}일 이어서 공부하고 있어요`
+    : (data.streak === 1 ? '오늘도 공부했어요' : '오늘 아직 시작하지 않았어요');
+}
+
+function renderStatBars(data) {
+  const list = $('#stat-bars');
+  list.textContent = '';
+  const top = Math.max(1, ...data.bars.map((b) => b.solved));
+
+  data.bars.forEach((b, i) => {
+    const li = document.createElement('li');
+    li.className = 'bar' + (i === data.bars.length - 1 ? ' today' : '');
+    li.title = `${b.date} · ${b.solved}문제 중 ${b.correct}개 정답`;
+
+    const stack = document.createElement('span');
+    stack.className = 'bar-stack';
+    stack.style.height = `${Math.round(b.solved / top * 100)}%`;
+
+    const good = document.createElement('span');
+    good.className = 'bar-good';
+    good.style.height = b.solved
+      ? `${Math.round(b.correct / b.solved * 100)}%` : '0%';
+    stack.appendChild(good);
+    li.appendChild(stack);
+
+    const day = document.createElement('small');
+    day.textContent = Number(b.date.slice(8, 10));
+    li.appendChild(day);
+    list.appendChild(li);
+  });
+
+  const w = data.week;
+  $('#stat-week').textContent = w.solved
+    ? `이번 주 ${w.solved}문제 · 정답률 ${data.week_rate}%`
+      + (w.asked ? ` · 질문 ${w.asked}번` : '')
+    : '이번 주에는 아직 푼 문제가 없어요';
+}
+
+function renderStatSubjects(data) {
+  const card = $('#stat-subject-card');
+  const list = $('#stat-subjects');
+  list.textContent = '';
+  card.hidden = !data.subjects.length;
+  $('#stat-range').textContent = `최근 ${data.range}일`;
+
+  data.subjects.forEach((sub) => {
+    const li = document.createElement('li');
+
+    const name = document.createElement('span');
+    name.className = 'sub-name';
+    name.textContent = sub.name;
+    li.appendChild(name);
+
+    const track = document.createElement('span');
+    track.className = 'sub-track';
+    const fill = document.createElement('span');
+    fill.className = 'sub-fill' + (sub.rate < 60 ? ' weak' : '');
+    fill.style.width = `${sub.rate}%`;
+    track.appendChild(fill);
+    li.appendChild(track);
+
+    const num = document.createElement('span');
+    num.className = 'sub-num';
+    num.textContent = `${sub.rate}% (${sub.correct}/${sub.solved})`;
+    li.appendChild(num);
+
+    list.appendChild(li);
+  });
+}
+
+async function loadStats() {
+  try {
+    const data = await api('/api/stats');
+    const empty = !data.month.solved && !data.month.made && !data.month.asked;
+    $('#stat-empty').hidden = !empty;
+    renderStatToday(data);
+    renderStatBars(data);
+    renderStatSubjects(data);
+  } catch (err) {
+    // 기록을 못 불러와도 계획 화면은 그대로 쓸 수 있게 조용히 넘어간다
+  }
+}
+
+function fillRepeatSelect(list) {
+  const sel = $('#plan-repeat');
+  const keep = sel.value;
+  sel.textContent = '';
+  (list || []).forEach((r) => sel.appendChild(new Option(r.name, r.key)));
+  sel.value = keep;
+}
+
+function renderPlans({ exam, items, repeats }) {
   renderDday(exam);
+  fillSubjectSelect($('#plan-subject'), $('#plan-subject').value, '과목 (선택 안 함)');
+  fillRepeatSelect(repeats);
 
   const list = $('#plan-list');
   list.textContent = '';
@@ -827,6 +1300,33 @@ function planRow(item) {
   const when = whenLabel(item);
   if (when) body.appendChild(when);
 
+  if (item.auto) {
+    const tag = document.createElement('span');
+    tag.className = 'plan-auto';
+    tag.textContent = '자동';
+    body.appendChild(tag);
+  }
+
+  if (item.repeat_name) {
+    const rep = document.createElement('span');
+    rep.className = 'plan-repeat';
+    rep.textContent = item.weekday_name
+      ? `매주 ${item.weekday_name}요일` : item.repeat_name;
+    body.appendChild(rep);
+  }
+
+  if (item.subject_name) {
+    const go2 = document.createElement('button');
+    go2.type = 'button';
+    go2.className = 'plan-go';
+    go2.textContent = `${item.subject_name} 풀러 가기 ›`;
+    go2.addEventListener('click', (e) => {
+      e.stopPropagation();
+      go(`quiz/${item.subject}`);
+    });
+    body.appendChild(go2);
+  }
+
   const del = document.createElement('button');
   del.className = 'del';
   del.textContent = '×';
@@ -873,6 +1373,8 @@ $('#plan-form').addEventListener('submit', async (e) => {
       text,
       time: $('#plan-time').value || null,
       end: $('#plan-end').value || null,
+      subject: $('#plan-subject').value || null,
+      repeat: $('#plan-repeat').value || '',
     }));
     // 시간은 남겨 둔다 — 이어지는 계획을 적을 때 편하다
     $('#plan-text').value = '';
@@ -970,6 +1472,723 @@ $('#school-form').addEventListener('submit', async (e) => {
     showMsg($('#school-msg'), err.message);
   }
 });
+
+/* ── 계정 설정 ─────────────────────────────────────────────
+   비밀번호 바꾸기와 계정 지우기. 둘 다 지금 비밀번호를 먼저 확인한다.   */
+
+on('#go-account', 'click', () => go('account'));
+
+function openAccount() {
+  renderSwatches();
+  renderDarkPick();
+  const who = $('#account-who');
+  who.textContent = `${me.name || me.user} · @${me.user}`;
+  who.hidden = false;
+
+  $('#pw-form').reset();
+  showMsg($('#pw-msg'), '');
+  $('#del-form').hidden = true;
+  $('#del-open').hidden = !!me.admin ? true : false;
+  $('#del-pw').value = '';
+  showMsg($('#del-msg'), '');
+
+  // 관리자 계정은 화면에서 지울 수 없다
+  $('#danger-note').textContent = me.admin
+    ? '관리자 계정은 여기서 지울 수 없습니다.'
+    : '문제 · 오답 · 계획 · 기록이 모두 함께 지워집니다.';
+  $('#del-open').hidden = !!me.admin;
+}
+
+on('#pw-form', 'submit', async (e) => {
+  e.preventDefault();
+  const btn = e.target.querySelector('button[type="submit"]');
+  btn.disabled = true;
+  try {
+    await api('/api/password', 'POST', {
+      current: $('#pw-now').value,
+      new: $('#pw-new').value,
+      new2: $('#pw-new2').value,
+    });
+    $('#pw-form').reset();
+    showMsg($('#pw-msg'), '비밀번호를 바꿨어요');
+  } catch (err) {
+    showMsg($('#pw-msg'), err.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+on('#del-open', 'click', () => {
+  $('#del-form').hidden = false;
+  $('#del-open').hidden = true;
+  $('#del-pw').focus();
+});
+
+on('#del-cancel', 'click', () => {
+  $('#del-form').hidden = true;
+  $('#del-open').hidden = false;
+  showMsg($('#del-msg'), '');
+});
+
+on('#del-form', 'submit', async (e) => {
+  e.preventDefault();
+  const ask = '정말 계정을 지울까요?' + String.fromCharCode(10)
+    + '문제와 기록이 모두 사라지고 되돌릴 수 없어요.';
+  if (!confirm(ask)) {
+    return;
+  }
+  try {
+    const data = await api('/api/me', 'DELETE',
+                           { password: $('#del-pw').value });
+    me = { user: null, has_users: data.has_users };
+    applyTheme(DEFAULT_THEME);
+    alert('계정을 지웠습니다.');
+    go(data.has_users ? 'login' : 'signup');
+  } catch (err) {
+    showMsg($('#del-msg'), err.message);
+  }
+});
+
+/* ── 앱 색 바꾸기 ───────────────────────────────────────────
+   style.css 의 --brand 하나만 바꾸면 배경·버튼·글씨색이 모두 따라 바뀐다.
+   고른 색은 계정에 저장해서 PC와 폰이 같은 색을 본다.              */
+
+const DEFAULT_THEME = '#7c3aed';
+const DEFAULT_DARK = 'auto';
+
+/* 기기가 어둡게 쓰고 있는지 */
+const systemDark = window.matchMedia
+  ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+
+function applyTheme(color) {
+  document.documentElement.style.setProperty('--brand', color || DEFAULT_THEME);
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', color || DEFAULT_THEME);
+}
+
+function applyDark(mode) {
+  const want = mode || DEFAULT_DARK;
+  const on = want === 'on' || (want === 'auto' && systemDark && systemDark.matches);
+  document.documentElement.setAttribute('data-dark', on ? 'on' : 'off');
+}
+
+// 기기 설정을 따르는 중이면, 기기가 바뀔 때 같이 바뀐다
+if (systemDark && systemDark.addEventListener) {
+  systemDark.addEventListener('change', () => {
+    if ((me.dark || DEFAULT_DARK) === 'auto') applyDark('auto');
+  });
+}
+
+async function saveDark(mode) {
+  applyDark(mode);
+  try {
+    const data = await api('/api/dark', 'PUT', { mode });
+    me.dark = data.dark;
+    showMsg($('#color-msg'), '');
+  } catch (err) {
+    applyDark(me.dark);
+    showMsg($('#color-msg'), err.message);
+  }
+}
+
+function renderDarkPick() {
+  const sel = $('#dark-pick');
+  if (!sel) return;
+  sel.textContent = '';
+  (me.darks || []).forEach((d) => sel.appendChild(new Option(d.name, d.key)));
+  sel.value = me.dark || DEFAULT_DARK;
+}
+
+on('#dark-pick', 'change', (e) => saveDark(e.target.value));
+
+function renderSwatches() {
+  const list = $('#swatches');
+  if (!list) return;
+  list.textContent = '';
+  (me.themes || []).forEach((t) => {
+    const li = document.createElement('li');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'swatch' + (t.color === me.theme ? ' on' : '');
+    btn.style.background = t.color;
+    btn.title = t.name;
+    btn.setAttribute('aria-label', t.name);
+    btn.addEventListener('click', () => saveTheme(t.color));
+    li.appendChild(btn);
+    list.appendChild(li);
+  });
+  const pick = $('#color-pick');
+  if (pick) pick.value = me.theme || DEFAULT_THEME;
+}
+
+async function saveTheme(color) {
+  applyTheme(color);            // 누르자마자 눈에 보이게
+  try {
+    const data = await api('/api/theme', 'PUT', { color });
+    me.theme = data.theme;
+    me.themes = data.themes;
+    renderSwatches();
+    showMsg($('#color-msg'), '');
+  } catch (err) {
+    applyTheme(me.theme);       // 저장하지 못했으면 되돌린다
+    showMsg($('#color-msg'), err.message);
+  }
+}
+
+on('#color-pick', 'input', (e) => applyTheme(e.target.value));
+on('#color-pick', 'change', (e) => saveTheme(e.target.value));
+on('#color-reset', 'click', () => saveTheme(DEFAULT_THEME));
+
+/* ── 회원 결제 ─────────────────────────────────────────────
+   결제사는 아직 정하지 않았다. 지금은 주문을 남기면 관리자가 입금을 확인해
+   승인하고, 결제사를 붙이면 앱을 열 때(또는 '결제 확인'을 누를 때) 서버가
+   결제사에 물어보고 저절로 회원이 되거나 기간이 늘어난다.              */
+
+on('#tier-chip', 'click', () => { if (!me.admin) go('billing'); });
+on('#bill-entry', 'click', () => go('billing'));
+
+/* 홈의 결제 카드 — 등급에 따라 다르게 보인다.
+     관리자  — 카드를 아예 두지 않는다 (결제할 일이 없다)
+     회원    — 기간 연장
+     비회원  — 회원 결제                                        */
+function renderBillEntry() {
+  const card = $('#bill-entry');
+  if (!card) return;
+
+  if (me.admin) {
+    card.hidden = true;
+    return;
+  }
+  card.hidden = false;
+
+  const icon = $('#bill-entry-icon');
+  const title = $('#bill-entry-title');
+  const note = $('#bill-entry-note');
+
+  if (me.member) {
+    icon.textContent = '⏳';
+    title.textContent = '기간 연장';
+    note.textContent = `${me.member_until} 까지 (${leftLabel(me.member_left)})`;
+  } else {
+    icon.textContent = '💳';
+    title.textContent = '회원 결제';
+    note.textContent = me.member_until
+      ? '기간이 지났어요. 다시 결제하면 이어서 쓸 수 있어요'
+      : '한도 없이 쓰려면 회원이 되어 주세요';
+  }
+}
+
+function money(n) {
+  return `${n.toLocaleString('ko-KR')}원`;
+}
+
+function renderBillNow() {
+  const box = $('#bill-now');
+  box.textContent = '';
+
+  const line = document.createElement('p');
+  line.className = 'bill-line';
+  if (billing.admin) {
+    line.textContent = '관리자는 언제나 회원입니다';
+  } else if (billing.member) {
+    line.textContent = `회원 · ${billing.member_until} 까지`
+      + ` (${leftLabel(billing.member_left)})`;
+  } else if (billing.expired) {
+    line.textContent = `기간이 지났어요 (${billing.member_until} 까지였습니다)`;
+  } else {
+    line.textContent = '지금은 비회원이에요';
+  }
+  box.appendChild(line);
+
+  const hint = document.createElement('p');
+  hint.className = 'bill-hint';
+  hint.textContent = billing.member
+    ? '기간을 더 사면 남은 기간 뒤로 이어집니다.'
+    : '비회원은 하루에 문제 만들기 5개, AI 질문 10번까지 쓸 수 있어요.';
+  box.appendChild(hint);
+
+  const el = $('#billing-state');
+  el.textContent = billing.member ? leftLabel(billing.member_left) : '비회원';
+  el.hidden = false;
+}
+
+function renderPayPlans() {
+  const list = $('#plan-pick');
+  list.textContent = '';
+
+  // 처음 열면 가운데(가장 많이 고르는) 것을 미리 골라 둔다
+  if (!billing.plans.some((p) => p.key === pickedPlan)) {
+    pickedPlan = (billing.plans[1] || billing.plans[0] || {}).key || null;
+  }
+
+  const cheapest = Math.max(...billing.plans.map((p) => p.price / p.days));
+
+  billing.plans.forEach((plan, i) => {
+    const li = document.createElement('li');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'plan-card' + (plan.key === pickedPlan ? ' on' : '');
+    btn.setAttribute('aria-pressed', String(plan.key === pickedPlan));
+
+    const save = Math.round((1 - (plan.price / plan.days) / cheapest) * 100);
+    if (save >= 5) {
+      const tag = document.createElement('span');
+      tag.className = 'plan-save';
+      tag.textContent = `${save}% 싸요`;
+      btn.appendChild(tag);
+    }
+
+    const name = document.createElement('strong');
+    name.textContent = plan.name;
+    btn.appendChild(name);
+
+    const price = document.createElement('span');
+    price.className = 'plan-price';
+    price.textContent = money(plan.price);
+    btn.appendChild(price);
+
+    const per = document.createElement('small');
+    per.textContent = `한 달 ${money(Math.round(plan.price / plan.days * 30))} 꼴`;
+    btn.appendChild(per);
+
+    btn.addEventListener('click', () => {
+      pickedPlan = plan.key;
+      renderPayPlans();
+      renderPayButton();
+    });
+    li.appendChild(btn);
+    list.appendChild(li);
+  });
+}
+
+function renderPayButton() {
+  const btn = $('#bill-pay');
+  const text = $('#pay-text');
+  const plan = billing.plans.find((p) => p.key === pickedPlan);
+
+  if (billing.admin) {
+    text.textContent = '관리자는 결제하지 않아도 됩니다';
+    btn.disabled = true;
+    return;
+  }
+  if (!plan) {
+    text.textContent = '기간을 골라 주세요';
+    btn.disabled = true;
+    return;
+  }
+  btn.disabled = false;
+  text.textContent = billing.member
+    ? `${money(plan.price)} 결제하고 ${plan.days}일 더 쓰기`
+    : `${money(plan.price)} 결제하고 회원 되기`;
+}
+
+on('#bill-pay', 'click', () => {
+  const plan = billing.plans.find((p) => p.key === pickedPlan);
+  if (plan) buy(plan);
+});
+
+const ORDER_STATE = { pending: '기다리는 중', paid: '결제됨',
+                      canceled: '취소됨' };
+
+function renderOrders() {
+  const list = $('#order-list');
+  list.textContent = '';
+  $('#order-label').hidden = !billing.orders.length;
+
+  billing.orders.forEach((o) => {
+    const li = document.createElement('li');
+    li.className = 'card order';
+
+    const top = document.createElement('div');
+    top.className = 'order-top';
+    const name = document.createElement('strong');
+    name.textContent = `${o.name} · ${money(o.price)}`;
+    top.appendChild(name);
+    const state = document.createElement('span');
+    state.className = `order-state ${o.status}`;
+    state.textContent = ORDER_STATE[o.status] || o.status;
+    top.appendChild(state);
+    li.appendChild(top);
+
+    const when = document.createElement('p');
+    when.className = 'order-when';
+    when.textContent = [
+      o.created_at.replace('T', ' ').slice(0, 16) + ' 신청',
+      o.paid_at ? o.paid_at.replace('T', ' ').slice(0, 16) + ' 결제' : null,
+      o.auto ? '자동 갱신' : null,
+    ].filter(Boolean).join(' · ');
+    li.appendChild(when);
+
+    if (o.status === 'pending') {
+      const wait = document.createElement('p');
+      wait.className = 'order-wait';
+      wait.textContent = billing.provider === 'manual'
+        ? '입금이 확인되면 회원이 됩니다.'
+        : '결제를 마쳤다면 아래 버튼을 눌러 주세요.';
+      li.appendChild(wait);
+
+      const row = document.createElement('div');
+      row.className = 'account-buttons';
+      const check = document.createElement('button');
+      check.type = 'button';
+      check.className = 'btn-sub';
+      check.textContent = '결제 확인';
+      check.addEventListener('click', () => checkPay(check));
+      row.appendChild(check);
+
+      const off = document.createElement('button');
+      off.type = 'button';
+      off.className = 'btn-sub off';
+      off.textContent = '그만두기';
+      off.addEventListener('click', () => cancelOrder(o));
+      row.appendChild(off);
+      li.appendChild(row);
+    }
+    list.appendChild(li);
+  });
+}
+
+/* 자동 결제 안내 — 안 쓰면 건너뛴다는 것을 분명히 알린다 */
+function renderAutoNote() {
+  const note = $('#auto-note');
+  const skip = $('#auto-skip');
+  const idle = billing.idle_days;
+
+  note.textContent = `${billing.idle_limit}일 넘게 앱을 쓰지 않으면 자동 결제를`
+    + ' 건너뜁니다. 안 쓰는 동안 돈이 빠져나가지 않아요.'
+    + (idle ? ` (마지막 사용 ${idle}일 전)` : '');
+
+  skip.textContent = billing.renew_note || '';
+  skip.hidden = !billing.renew_note;
+}
+
+function renderBilling(data) {
+  billing = data;
+  renderBillNow();
+  renderPayPlans();
+  renderPayButton();
+  renderAutoNote();
+  renderOrders();
+  $('#auto-renew').checked = !!data.auto_renew;
+}
+
+async function loadBilling() {
+  try {
+    renderBilling(await api('/api/billing'));
+  } catch (err) {
+    showMsg($('#bill-msg'), err.message);
+  }
+}
+
+async function buy(plan) {
+  if (!confirm(`${plan.name} · ${money(plan.price)}
+신청할까요?`)) return;
+  try {
+    const data = await api('/api/billing/checkout', 'POST', { plan: plan.key });
+    renderBilling(data);
+    showMsg($('#bill-msg'), data.provider === 'manual'
+      ? '신청했어요. 입금이 확인되면 회원이 됩니다.'
+      : '결제를 마친 뒤 결제 확인을 눌러 주세요.');
+  } catch (err) {
+    showMsg($('#bill-msg'), err.message);
+  }
+}
+
+async function checkPay(btn) {
+  btn.disabled = true;
+  try {
+    const data = await api('/api/billing/check', 'POST');
+    const done = (data.applied || []).length;
+    renderBilling(data);
+    me = await api('/api/me');
+    showMsg($('#bill-msg'), done
+      ? '결제가 확인됐어요. 회원이 되었습니다.'
+      : '아직 결제가 확인되지 않았어요.');
+  } catch (err) {
+    btn.disabled = false;
+    showMsg($('#bill-msg'), err.message);
+  }
+}
+
+async function cancelOrder(order) {
+  if (!confirm('이 신청을 그만둘까요?')) return;
+  try {
+    renderBilling(await api(`/api/billing/cancel/${order.id}`, 'POST'));
+    showMsg($('#bill-msg'), '');
+  } catch (err) {
+    showMsg($('#bill-msg'), err.message);
+  }
+}
+
+on('#auto-renew', 'change', async (e) => {
+  try {
+    renderBilling(await api('/api/billing/auto-renew', 'POST',
+                            { on: e.target.checked }));
+    showMsg($('#bill-msg'), e.target.checked
+      ? `기간이 끝나갈 때 자동으로 다시 신청합니다. `
+        + `${billing.idle_limit}일 넘게 안 쓰면 건너뜁니다.`
+      : '자동 갱신을 껐어요.');
+  } catch (err) {
+    e.target.checked = !e.target.checked;
+    showMsg($('#bill-msg'), err.message);
+  }
+});
+
+/* ── 계정 관리 (관리자만) ─────────────────────────────────
+   가입한 계정을 한눈에 본다. 서버도 관리자인지 다시 확인하므로
+   주소창에 #admin 을 쳐 넣어도 남의 목록은 보이지 않는다.        */
+
+on('#admin-entry', 'click', () => go('admin'));
+
+const TIERS = [
+  { key: 'admin', name: '관리자', note: '모든 한도를 무시합니다' },
+  { key: 'member', name: '회원', note: '기간 안에는 한도가 없습니다' },
+  { key: 'guest', name: '비회원', note: '하루 한도가 있습니다' },
+];
+
+/* 기간을 사람이 읽는 말로 — '12일 남음', '오늘까지', '3일 지남' */
+function leftLabel(left) {
+  if (left === null || left === undefined) return null;
+  if (left > 0) return `${left}일 남음`;
+  if (left === 0) return '오늘까지';
+  return `${-left}일 지남`;
+}
+
+function accountRow(row) {
+  const li = document.createElement('li');
+  li.className = `account tier-${row.tier}`;
+
+  const head = document.createElement('div');
+  head.className = 'account-head';
+
+  const name = document.createElement('strong');
+  name.textContent = row.name || row.user;
+  head.appendChild(name);
+
+  const id = document.createElement('span');
+  id.className = 'account-id';
+  id.textContent = '@' + row.user;
+  head.appendChild(id);
+
+  const tier = document.createElement('span');
+  tier.className = `account-tag ${row.tier}`;
+  tier.textContent = (TIERS.find((t) => t.key === row.tier) || {}).name || '';
+  head.appendChild(tier);
+
+  if (row.expired) {
+    const gone = document.createElement('span');
+    gone.className = 'account-tag expired';
+    gone.textContent = '기간 지남';
+    head.appendChild(gone);
+  }
+  if (row.me) {
+    const mine = document.createElement('span');
+    mine.className = 'account-tag';
+    mine.textContent = '나';
+    head.appendChild(mine);
+  }
+  li.appendChild(head);
+
+  const info = document.createElement('p');
+  info.className = 'account-info';
+  info.textContent = [
+    row.school,
+    row.birth,
+    row.created_at ? `${row.created_at.slice(0, 10)} 가입` : null,
+  ].filter(Boolean).join(' · ');
+  li.appendChild(info);
+
+  if (row.last_seen) {
+    const seen = document.createElement('p');
+    seen.className = 'account-info';
+    seen.textContent = `마지막 사용 ${row.last_seen}`
+      + (row.idle_days ? ` (${row.idle_days}일 전)` : ' (오늘)')
+      + (row.auto_renew ? ' · 자동 결제 켬' : '');
+    li.appendChild(seen);
+  }
+
+  if (row.member_until) {
+    const term = document.createElement('p');
+    term.className = 'account-term' + (row.expired ? ' gone' : '');
+    term.textContent = `회원 기간 ~ ${row.member_until}`
+      + ` (${leftLabel(row.member_left)})`;
+    li.appendChild(term);
+  }
+
+  const stats = document.createElement('p');
+  stats.className = 'account-stats';
+  [['문제', row.quiz], ['오답', row.wrong], ['계획', row.plans],
+   ['질문', row.asks], ['과목', row.subjects]].forEach(([label, n]) => {
+    const s = document.createElement('span');
+    s.textContent = `${label} ${n}`;
+    stats.appendChild(s);
+  });
+  li.appendChild(stats);
+
+  // 결제를 기다리는 신청 — 입금을 확인하면 승인한다
+  (row.pending || []).forEach((o) => {
+    const wait = document.createElement('div');
+    wait.className = 'account-pending';
+
+    const what = document.createElement('span');
+    what.textContent = `결제 대기 · ${o.name} ${o.price.toLocaleString('ko-KR')}원`
+      + (o.auto ? ' (자동 갱신)' : '');
+    wait.appendChild(what);
+
+    const ok = document.createElement('button');
+    ok.type = 'button';
+    ok.className = 'btn-sub';
+    ok.textContent = '입금 확인';
+    ok.addEventListener('click', () => confirmPay(row, o, ok));
+    wait.appendChild(ok);
+    li.appendChild(wait);
+  });
+
+  // 관리자는 언제나 회원이므로 바꿀 것이 없다
+  if (row.tier !== 'admin') {
+    const row2 = document.createElement('div');
+    row2.className = 'account-buttons';
+
+    const on = document.createElement('button');
+    on.type = 'button';
+    on.className = 'btn-sub';
+    on.textContent = row.member ? '기간 연장' : '회원으로 바꾸기';
+    on.addEventListener('click', () => setMember(row, true, row2));
+    row2.appendChild(on);
+
+    if (row.member || row.expired) {
+      const off = document.createElement('button');
+      off.type = 'button';
+      off.className = 'btn-sub off';
+      off.textContent = '비회원으로';
+      off.addEventListener('click', () => setMember(row, false, row2));
+      row2.appendChild(off);
+    }
+
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'btn-sub del-user';
+    del.textContent = '계정 지우기';
+    del.addEventListener('click', () => removeAccount(row, del));
+    row2.appendChild(del);
+
+    li.appendChild(row2);
+  }
+
+  return li;
+}
+
+async function removeAccount(row, btn) {
+  const ask = `${row.name}(@${row.user}) 님의 계정을 지울까요?`
+    + String.fromCharCode(10)
+    + '문제 · 오답 · 계획 · 기록이 모두 사라지고 되돌릴 수 없어요.';
+  if (!confirm(ask)) return;
+  if (prompt('확인을 위해 아이디를 그대로 적어 주세요') !== row.user) {
+    showMsg($('#admin-msg'), '아이디가 달라서 지우지 않았어요');
+    return;
+  }
+  btn.disabled = true;
+  try {
+    await api(`/api/admin/users/${encodeURIComponent(row.user)}`, 'DELETE');
+    await loadAccounts();
+    showMsg($('#admin-msg'), `${row.user} 계정을 지웠어요`);
+  } catch (err) {
+    btn.disabled = false;
+    showMsg($('#admin-msg'), err.message);
+  }
+}
+
+async function confirmPay(row, order, btn) {
+  if (!confirm(`${row.name}(@${row.user}) 님의 ${order.name} `
+    + `${order.price.toLocaleString('ko-KR')}원 입금을 확인했나요?
+`
+    + `누르면 ${order.days}일이 더해집니다.`)) return;
+  btn.disabled = true;
+  try {
+    await api(`/api/admin/payments/${order.id}/confirm`, 'POST');
+    await loadAccounts();
+  } catch (err) {
+    btn.disabled = false;
+    showMsg($('#admin-msg'), err.message);
+  }
+}
+
+async function setMember(row, turnOn, box) {
+  let days = null;
+  if (turnOn) {
+    const asked = prompt(
+      `${row.name}(@${row.user}) 님의 회원 기간을 며칠로 할까요?
+`
+      + (row.member
+        ? `지금 만료일 ${row.member_until} 뒤로 이어집니다.`
+        : '결제를 확인한 뒤에 눌러 주세요.'),
+      String(memberDays));
+    if (asked === null) return;          // 취소
+    days = Number(asked);
+    if (!Number.isInteger(days) || days < 1) {
+      showMsg($('#admin-msg'), '기간은 1일 이상의 숫자로 적어 주세요');
+      return;
+    }
+  } else if (!confirm(`${row.name}(@${row.user}) 님을 비회원으로 되돌릴까요?`)) {
+    return;
+  }
+
+  box.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+  try {
+    await api(`/api/admin/users/${encodeURIComponent(row.user)}`, 'PATCH',
+              turnOn ? { member: true, days } : { member: false });
+    await loadAccounts();
+  } catch (err) {
+    box.querySelectorAll('button').forEach((b) => { b.disabled = false; });
+    showMsg($('#admin-msg'), err.message);
+  }
+}
+
+function renderAccounts(data) {
+  memberDays = data.member_days || memberDays;
+  const list = $('#account-list');
+  list.textContent = '';
+  showMsg($('#admin-msg'), '');
+
+  // 관리자 → 회원 → 비회원 순으로 구역을 나눠 담는다
+  TIERS.forEach((tier) => {
+    const rows = data.users.filter((u) => u.tier === tier.key);
+    if (!rows.length) return;
+
+    const head = document.createElement('li');
+    head.className = `account-group ${tier.key}`;
+    const title = document.createElement('strong');
+    title.textContent = `${tier.name} ${rows.length}명`;
+    head.appendChild(title);
+    const note = document.createElement('small');
+    note.textContent = tier.note;
+    head.appendChild(note);
+    list.appendChild(head);
+
+    rows.forEach((row) => list.appendChild(accountRow(row)));
+  });
+
+  const note = $('#admin-count');
+  note.textContent = `모두 ${data.count}명 · 관리자 ${data.admins} · `
+    + `회원 ${data.members} · 비회원 ${data.guests}`
+    + (data.expired ? ` (기간 지남 ${data.expired})` : '');
+  note.hidden = false;
+  $('#admin-empty').hidden = data.count > 0;
+}
+
+async function loadAccounts() {
+  const empty = $('#admin-empty');
+  empty.textContent = '불러오는 중이에요.';
+  empty.hidden = false;
+  try {
+    renderAccounts(await api('/api/admin/users'));
+  } catch (err) {
+    $('#account-list').textContent = '';
+    $('#admin-count').hidden = true;
+    empty.textContent = err.message;
+    empty.hidden = false;
+  }
+}
 
 /* ── 과목 편집 ─────────────────────────────────────────────
    과학이 물리학·화학으로 나뉘는 것처럼 과목은 사람마다 다르다.

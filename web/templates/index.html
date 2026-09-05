@@ -200,6 +200,7 @@
     <header class="home-header">
       <p class="greeting">안녕하세요, <span id="who">공부하는 사람</span>님
         <button type="button" class="school-chip" id="school-chip" hidden></button>
+        <button type="button" class="tier-chip" id="tier-chip" hidden></button>
       </p>
       <h2 class="home-title">오늘은 무엇을 공부할까요?</h2>
       <div class="avatar">AI</div>
@@ -238,9 +239,29 @@
       {% endfor %}
     </ul>
 
+    <button type="button" class="card bill-entry" id="bill-entry">
+      <span class="chip bill-chip" id="bill-entry-icon">💳</span>
+      <span class="menu-text">
+        <strong id="bill-entry-title">회원 결제</strong>
+        <small id="bill-entry-note">한도 없이 쓰려면 회원이 되어 주세요</small>
+      </span>
+      <span class="chev">›</span>
+    </button>
+
+    <button type="button" class="card admin-entry" id="admin-entry" hidden>
+      <span class="chip admin-chip">👑</span>
+      <span class="menu-text">
+        <strong>계정 관리</strong>
+        <small>가입한 계정 목록 보기</small>
+      </span>
+      <span class="chev">›</span>
+    </button>
+
     <p class="foot-note">카드를 눌러 학습을 시작하세요</p>
 
     <div class="home-actions">
+      <button type="button" class="link-btn" id="go-account">계정 설정</button>
+      <span class="dot">·</span>
       <button type="button" class="link-btn" id="switch-view">PC로 보기</button>
       <span class="dot">·</span>
       <button type="button" class="link-btn" id="logout">로그아웃</button>
@@ -256,6 +277,127 @@
       <h2>앱을 종료했습니다</h2>
       <p>이 창은 닫으셔도 됩니다.<br>
         다시 쓰려면 <b>웹앱 실행.bat</b> 을 실행하세요.</p>
+    </div>
+  </section>
+
+  <!-- ── 계정 설정 ──────────────────────────────────────── -->
+  <section id="account" class="screen">
+    <header class="detail-header">
+      <button class="back" data-go="home">‹&nbsp; 뒤로</button>
+      <h2>계정 설정</h2>
+      <p class="head-note" id="account-who" hidden></p>
+    </header>
+
+    <div class="panel">
+      <h3 class="section-label">앱 색</h3>
+      <div class="card color-box" id="color-box">
+        <ul class="swatches" id="swatches"></ul>
+        <div class="color-custom">
+          <label for="color-pick">직접 고르기</label>
+          <input id="color-pick" type="color" value="#7c3aed">
+          <button type="button" class="btn-sub" id="color-reset">처음 색으로</button>
+        </div>
+        <div class="color-custom">
+          <label for="dark-pick">밝기</label>
+          <select id="dark-pick"></select>
+        </div>
+        <p class="tiny-label">고른 색과 밝기는 계정에 저장되어 PC와 폰이
+          같게 보입니다.</p>
+        <p class="plan-msg" id="color-msg" hidden></p>
+      </div>
+
+      <h3 class="section-label">비밀번호 바꾸기</h3>
+      <form class="card auth-card" id="pw-form">
+        <label class="field">
+          <span>지금 비밀번호</span>
+          <input id="pw-now" type="password" required autocomplete="current-password">
+        </label>
+        <label class="field">
+          <span>새 비밀번호</span>
+          <input id="pw-new" type="password" required
+                 autocomplete="new-password" placeholder="6자 이상">
+        </label>
+        <label class="field">
+          <span>새 비밀번호 확인</span>
+          <input id="pw-new2" type="password" required
+                 autocomplete="new-password" placeholder="한 번 더">
+        </label>
+        <button class="btn-auth" type="submit">바꾸기</button>
+        <p class="auth-msg" id="pw-msg" hidden></p>
+      </form>
+
+      <h3 class="section-label">계정 지우기</h3>
+      <div class="card danger-card" id="danger-card">
+        <p class="danger-title">계정을 지우면 되돌릴 수 없어요</p>
+        <p class="danger-note" id="danger-note">
+          문제 · 오답 · 계획 · 기록이 모두 함께 지워집니다.
+        </p>
+        <button type="button" class="btn-danger" id="del-open">계정 지우기</button>
+
+        <form id="del-form" hidden>
+          <label class="field">
+            <span>확인을 위해 비밀번호를 적어 주세요</span>
+            <input id="del-pw" type="password" autocomplete="current-password">
+          </label>
+          <div class="account-buttons">
+            <button type="submit" class="btn-danger">정말 지우기</button>
+            <button type="button" class="btn-sub" id="del-cancel">그만두기</button>
+          </div>
+        </form>
+        <p class="auth-msg" id="del-msg" hidden></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 회원 결제 ──────────────────────────────────────── -->
+  <section id="billing" class="screen">
+    <header class="detail-header">
+      <button class="back" data-go="home">‹&nbsp; 뒤로</button>
+      <h2>회원</h2>
+      <p class="head-note" id="billing-state" hidden></p>
+    </header>
+
+    <div class="panel">
+      <div class="card bill-now" id="bill-now"></div>
+
+      <h3 class="section-label">기간 고르기</h3>
+      <ul class="plan-pick" id="plan-pick"></ul>
+
+      <button class="btn-pay" id="bill-pay" type="button">
+        <span class="pay-mark">💳</span>
+        <span class="pay-text" id="pay-text">결제하기</span>
+      </button>
+      <p class="pay-safe">결제 후 바로 회원이 됩니다 · 언제든 그만둘 수 있어요</p>
+
+      <label class="keep bill-auto">
+        <input id="auto-renew" type="checkbox">
+        <span>기간이 끝나면 자동으로 다시 결제</span>
+      </label>
+      <p class="auto-note" id="auto-note"></p>
+      <p class="auto-skip" id="auto-skip" hidden></p>
+
+      <p class="plan-msg" id="bill-msg" hidden></p>
+
+      <h3 class="section-label" id="order-label" hidden>결제 내역</h3>
+      <ul class="quiz-list" id="order-list"></ul>
+    </div>
+  </section>
+
+  <!-- ── 계정 관리 (관리자만) ───────────────────────────── -->
+  <section id="admin" class="screen">
+    <header class="detail-header">
+      <button class="back" data-go="home">‹&nbsp; 뒤로</button>
+      <h2>계정 관리</h2>
+      <p class="head-note" id="admin-count" hidden></p>
+    </header>
+
+    <div class="panel">
+      <ul class="account-list" id="account-list"></ul>
+      <p class="plan-msg" id="admin-msg" hidden></p>
+      <p class="empty-note" id="admin-empty" hidden>
+        불러오는 중이에요.
+      </p>
+      <p class="foot-note">비밀번호는 되돌릴 수 없게 저장되어 아무에게도 보이지 않습니다</p>
     </div>
   </section>
 
@@ -280,6 +422,13 @@
           <span class="tilde">~</span>
           <input id="plan-end" type="time" aria-label="끝 시간">
         </div>
+        <div class="add-row">
+          <select id="plan-subject" aria-label="과목"></select>
+          <select id="plan-repeat" aria-label="반복"></select>
+        </div>
+        <p class="tiny-label">과목을 고르면 바로 풀러 갈 수 있고,
+          그 과목을 풀면 계획이 저절로 체크됩니다.
+          반복으로 두면 날마다 체크가 새로 시작돼요.</p>
         <button class="btn-add" type="submit">추가</button>
       </form>
 
@@ -299,7 +448,59 @@
         </div>
       </details>
 
+      <details class="card exam-card" id="auto-card">
+        <summary>시험까지 계획 짜 주기</summary>
+        <div class="exam-body">
+          <p class="tiny-label">약한 과목에 시간을 더 줍니다.
+            시험일까지 되풀이되는 시간표가 만들어지고, 시험이 지나면
+            저절로 사라집니다.</p>
+          <div class="add-row">
+            <select id="auto-minutes" aria-label="하루 공부 시간">
+              <option value="60">하루 1시간</option>
+              <option value="90">하루 1시간 30분</option>
+              <option value="120" selected>하루 2시간</option>
+              <option value="180">하루 3시간</option>
+              <option value="240">하루 4시간</option>
+            </select>
+            <input id="auto-start" type="time" value="19:00" aria-label="시작 시각">
+          </div>
+          <select id="auto-repeat" aria-label="언제">
+            <option value="daily">매일</option>
+            <option value="weekday">평일만 (월~금)</option>
+          </select>
+          <div class="account-buttons">
+            <button class="btn-sub" id="auto-make" type="button">계획 짜기</button>
+            <button class="btn-sub off" id="auto-clear" type="button">짠 계획 지우기</button>
+          </div>
+          <p class="plan-msg" id="auto-msg" hidden></p>
+        </div>
+      </details>
+
       <p class="plan-msg" id="plan-msg" hidden></p>
+
+      <!-- 공부 기록 -->
+      <h3 class="section-label">공부 기록</h3>
+
+      <div class="card stat-card">
+        <div class="stat-row" id="stat-today"></div>
+        <p class="stat-streak" id="stat-streak"></p>
+      </div>
+
+      <div class="card stat-card">
+        <p class="stat-title">최근 2주</p>
+        <ul class="bars" id="stat-bars"></ul>
+        <p class="stat-foot" id="stat-week"></p>
+      </div>
+
+      <div class="card stat-card" id="stat-subject-card" hidden>
+        <p class="stat-title">과목별 정답률 <small id="stat-range"></small></p>
+        <ul class="stat-subjects" id="stat-subjects"></ul>
+        <p class="stat-foot">낮은 과목이 위에 옵니다 — 거기를 더 보면 됩니다</p>
+      </div>
+
+      <p class="empty-note" id="stat-empty" hidden>
+        아직 기록이 없어요.<br>문제를 풀면 여기에 쌓입니다.
+      </p>
     </div>
 
     <!-- 문제 풀기 -->
@@ -346,6 +547,12 @@
 
         <details class="card add-quiz" id="quiz-add-box">
           <summary>문제 추가</summary>
+
+          <div class="add-tabs" role="group" aria-label="넣는 방법">
+            <button type="button" class="add-tab on" data-add="one">하나씩</button>
+            <button type="button" class="add-tab" data-add="many">여러 개 한 번에</button>
+          </div>
+
           <form class="exam-body" id="quiz-form">
             <input id="q-question" type="text" maxlength="300" required
                    placeholder="문제 (예: 3의 제곱은?)" autocomplete="off">
@@ -356,7 +563,19 @@
             <label class="tiny-label">주된 과목 (다른 과목이 섞였을 때)
               <select id="q-main"></select>
             </label>
+            <p class="tiny-label" id="make-left" hidden></p>
             <button class="btn-sub" type="submit">추가</button>
+          </form>
+
+          <form class="exam-body" id="bulk-form" hidden>
+            <textarea id="bulk-text" rows="7" maxlength="8000"
+              placeholder="한 줄에 하나씩, 문제와 정답을 / 로 나눠 적으세요&#10;&#10;3의 제곱은? / 9&#10;물의 화학식은? / H2O / 수소 둘에 산소 하나&#10;2+2 , 4"></textarea>
+            <p class="tiny-label">쉼표나 탭으로 나눠도 됩니다. 세 번째 칸은 해설이에요.
+              빈 줄과 <code>#</code> 로 시작하는 줄은 넘어갑니다.</p>
+            <p class="tiny-label" id="bulk-left" hidden></p>
+            <button class="btn-sub" id="bulk-add" type="submit">한 번에 넣기</button>
+            <p class="plan-msg" id="bulk-msg" hidden></p>
+            <ul class="bulk-bad" id="bulk-bad" hidden></ul>
           </form>
         </details>
 
@@ -386,15 +605,24 @@
 
     <!-- 오답 노트 -->
     <div class="panel" id="panel-wrong" hidden>
-      <div class="card quiz-top">
-        <p class="quiz-count" id="wrong-count">틀린 문제 0개</p>
-        <button class="btn-add" id="wrong-start" type="button">다시 풀기</button>
+      <div class="card review-top">
+        <p class="review-big" id="review-count">오늘 복습할 문제 0개</p>
+        <p class="review-sub" id="review-sub">복습은 하루 횟수를 쓰지 않아요</p>
+        <button class="btn-add" id="review-start" type="button">복습 시작</button>
       </div>
+
+      <div class="wrong-head">
+        <p class="quiz-count" id="wrong-count">틀린 문제 0개</p>
+        <button type="button" class="link-btn" id="wrong-start">전부 다시 풀기</button>
+      </div>
+
+      <ul class="chips" id="wrong-filter"></ul>
 
       <ul class="quiz-list" id="wrong-list"></ul>
       <p class="empty-note" id="wrong-empty" hidden>
         틀린 문제가 없어요.<br>문제 풀기에서 틀리면 여기에 모입니다.
       </p>
+      <p class="foot-note" id="review-hint" hidden></p>
     </div>
 
     <!-- AI에게 질문 -->
