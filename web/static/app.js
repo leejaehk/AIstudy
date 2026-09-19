@@ -1808,24 +1808,34 @@ function renderShareSum() {
     : '적어도 한 과목은 시간을 주세요';
 }
 
+let 추천 = [];            // 서버가 골라 준 것 ('추천대로 채우기' 에 쓴다)
+
+/* 목록은 비어 있는 채로 시작한다. 무엇을 할지는 사람이 넣는다. */
 function renderShare(data) {
   모든과목 = [...data.items, ...data.rest]
     .map((x) => ({ id: x.id, name: x.name, rate: x.rate }));
-  넣은과목 = data.items.map((x) => ({ id: x.id, name: x.name,
-                                      rate: x.rate, minutes: x.minutes }));
+  추천 = data.items.map((x) => ({ id: x.id, name: x.name,
+                                  rate: x.rate, minutes: x.minutes }));
   renderShareList();
   renderSharePick();
   renderShareSum();
 }
 
-async function loadShare() {
+async function loadShare(채울까) {
   const 하루 = pickedDayMinutes();
   if (하루 < 20) {
     showMsg($('#auto-msg'), '하루 공부 시간은 20분 이상으로 정해 주세요');
     return;
   }
   try {
-    renderShare(await api(`/api/plans/auto/suggest?minutes=${하루}`));
+    const data = await api(`/api/plans/auto/suggest?minutes=${하루}`);
+    const 두던것 = 넣은과목;
+    renderShare(data);
+    // 하루 시간만 바꿨을 때는 넣어 둔 것을 그대로 둔다
+    넣은과목 = 채울까 ? 추천.map((x) => ({ ...x })) : 두던것;
+    renderShareList();
+    renderSharePick();
+    renderShareSum();
     showMsg($('#auto-msg'), '');
   } catch (err) {
     showMsg($('#auto-msg'), err.message);
@@ -1844,14 +1854,14 @@ on('#share-add', 'click', () => {
   renderShareSum();
 });
 
-on('#auto-hours', 'change', loadShare);
-on('#auto-mins', 'change', loadShare);
-on('#share-reset', 'click', loadShare);
+on('#auto-hours', 'change', () => loadShare(false));
+on('#auto-mins', 'change', () => loadShare(false));
+on('#share-reset', 'click', () => loadShare(true));
 on('#exam-card', 'toggle', (e) => {
   if (e.target.open) {
     fillClockPick();
     fillDayPick();
-    if (!모든과목.length) loadShare();
+    if (!모든과목.length) loadShare(false);
   }
 });
 
