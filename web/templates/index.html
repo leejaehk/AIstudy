@@ -460,24 +460,47 @@
           </label>
 
           <div id="exam-plan-box">
-            <div class="add-row">
-              <select id="auto-minutes" aria-label="하루 공부 시간">
-                <option value="60">하루 1시간</option>
-                <option value="90">하루 1시간 30분</option>
-                <option value="120" selected>하루 2시간</option>
-                <option value="180">하루 3시간</option>
-                <option value="240">하루 4시간</option>
+            <label class="pick-label" for="auto-minutes">하루 공부 시간</label>
+            <select id="auto-minutes" aria-label="하루 공부 시간">
+              <option value="60">1시간</option>
+              <option value="90">1시간 30분</option>
+              <option value="120" selected>2시간</option>
+              <option value="150">2시간 30분</option>
+              <option value="180">3시간</option>
+              <option value="240">4시간</option>
+              <option value="300">5시간</option>
+            </select>
+
+            <label class="pick-label">몇 시부터 할까요</label>
+            <div class="time-pick">
+              <select id="auto-ampm" aria-label="오전·오후">
+                <option value="am">오전</option>
+                <option value="pm" selected>오후</option>
               </select>
-              <input id="auto-start" type="time" value="19:00"
-                     aria-label="시작 시각">
+              <select id="auto-hour" aria-label="시"></select>
+              <span class="pick-unit">시</span>
+              <select id="auto-min" aria-label="분"></select>
+              <span class="pick-unit">분</span>
             </div>
+
+            <label class="pick-label" for="auto-repeat">언제 할까요</label>
             <select id="auto-repeat" aria-label="언제">
               <option value="daily">매일</option>
               <option value="weekday">평일만 (월~금)</option>
             </select>
-            <p class="tiny-label">약한 과목에 시간을 더 줍니다.
-              시험일까지 되풀이되는 시간표가 만들어지고, 시험이 지나면
-              저절로 사라집니다.</p>
+
+            <div id="share-box">
+              <label class="pick-label">과목마다 몇 분씩 할까요</label>
+              <ul class="share-list" id="share-list"></ul>
+              <p class="tiny-label" id="share-sum"></p>
+              <p class="tiny-label">약한 과목에 시간을 더 주어 채워 두었어요.
+                고치면 고친 대로 짜 드립니다.
+                <button type="button" class="link-btn" id="share-reset">추천대로 되돌리기</button>
+              </p>
+            </div>
+
+            <p class="tiny-label">시험일까지 되풀이되는 시간표가 만들어지고,
+              시험이 지나면 저절로 사라집니다.</p>
           </div>
 
           <div class="account-buttons">

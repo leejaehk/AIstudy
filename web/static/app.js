@@ -1676,6 +1676,115 @@ $('#plan-form').addEventListener('submit', async (e) => {
   }
 });
 
+/* ── 시각 고르기 (오전·오후 / 시 / 분) ─────────────────────
+   시계 모양 고르개는 눌러 돌리기가 번거로워서, 목록에서 고르게 한다. */
+
+function fillClockPick() {
+  const 시 = $('#auto-hour');
+  const 분 = $('#auto-min');
+  if (!시 || 시.options.length) return;        // 한 번만 채운다
+  for (let i = 1; i <= 12; i += 1) 시.appendChild(new Option(i, i));
+  for (let i = 0; i < 60; i += 5) {
+    분.appendChild(new Option(String(i).padStart(2, '0'), i));
+  }
+  시.value = 7;        // 오후 7시
+  분.value = 0;
+}
+
+/* 고른 것을 서버가 아는 꼴(HH:MM)로 */
+function pickedClock() {
+  let 시 = Number($('#auto-hour').value || 7);
+  const 분 = Number($('#auto-min').value || 0);
+  if ($('#auto-ampm').value === 'pm' && 시 !== 12) 시 += 12;
+  if ($('#auto-ampm').value === 'am' && 시 === 12) 시 = 0;
+  return `${String(시).padStart(2, '0')}:${String(분).padStart(2, '0')}`;
+}
+
+/* ── 과목마다 몇 분씩 ───────────────────────────────────── */
+
+let 추천몫 = null;        // 서버가 추천한 과목별 시간
+
+function renderShare(data) {
+  추천몫 = data;
+  const list = $('#share-list');
+  list.textContent = '';
+
+  [...data.items, ...data.rest].forEach((sub) => {
+    const li = document.createElement('li');
+
+    const name = document.createElement('span');
+    name.className = 'share-name';
+    name.textContent = sub.name;
+    li.appendChild(name);
+
+    const rate = document.createElement('span');
+    rate.className = 'share-rate';
+    rate.textContent = sub.rate === null || sub.rate === undefined
+      ? '아직 안 풂' : `정답률 ${sub.rate}%`;
+    li.appendChild(rate);
+
+    const num = document.createElement('input');
+    num.type = 'number';
+    num.className = 'share-min';
+    num.min = 0;
+    num.max = 720;
+    num.step = 5;
+    num.value = sub.minutes;
+    num.dataset.subject = sub.id;
+    num.addEventListener('input', renderShareSum);
+    li.appendChild(num);
+
+    const unit = document.createElement('span');
+    unit.className = 'pick-unit';
+    unit.textContent = '분';
+    li.appendChild(unit);
+
+    list.appendChild(li);
+  });
+  renderShareSum();
+}
+
+function shareValues() {
+  const 몫 = {};
+  document.querySelectorAll('#share-list .share-min').forEach((el) => {
+    const 분 = Number(el.value) || 0;
+    if (분 > 0) 몫[el.dataset.subject] = 분;
+  });
+  return 몫;
+}
+
+function renderShareSum() {
+  const 몫 = shareValues();
+  const 합 = Object.values(몫).reduce((a, b) => a + b, 0);
+  const 시간 = 합 >= 60
+    ? `${Math.floor(합 / 60)}시간 ${합 % 60 ? `${합 % 60}분` : ''}`.trim()
+    : `${합}분`;
+  $('#share-sum').textContent = 합
+    ? `모두 ${시간} · 과목 ${Object.keys(몫).length}개`
+    : '적어도 한 과목은 시간을 주세요';
+}
+
+async function loadShare() {
+  try {
+    renderShare(await api('/api/plans/auto/suggest?minutes='
+      + Number($('#auto-minutes').value)));
+    showMsg($('#auto-msg'), '');
+  } catch (err) {
+    $('#share-list').textContent = '';
+    $('#share-sum').textContent = '';
+    showMsg($('#auto-msg'), err.message);
+  }
+}
+
+on('#auto-minutes', 'change', loadShare);
+on('#share-reset', 'click', loadShare);
+on('#exam-card', 'toggle', (e) => {
+  if (e.target.open) {
+    fillClockPick();
+    if (!추천몫) loadShare();
+  }
+});
+
 /* 시험일을 정하면서 계획까지 한 번에 짠다.
    따로 두었더니 시험일만 정하고 계획 짜기를 잊는 일이 생겼다. */
 
@@ -1707,16 +1816,22 @@ $('#exam-save').addEventListener('click', async (e) => {
       showMsg($('#auto-msg'), '시험일을 저장했어요');
       return;
     }
+    const 몫 = shareValues();
+    if (!Object.keys(몫).length) {
+      showMsg($('#auto-msg'), '적어도 한 과목은 시간을 주세요');
+      return;
+    }
     data = await api('/api/plans/auto', 'POST', {
       minutes: Number($('#auto-minutes').value),
-      start: $('#auto-start').value || '19:00',
+      start: pickedClock(),
       repeat: $('#auto-repeat').value,
+      share: 몫,
     });
     renderPlans(data);
-    const 몫 = (data.made || [])
+    const 짜인것 = (data.made || [])
       .map((m) => `${m.name} ${m.minutes}분`).join(' · ');
     showMsg($('#auto-msg'),
-            `시험까지 ${data.days_left}일 — ${몫} 로 짰어요`);
+            `시험까지 ${data.days_left}일 — ${짜인것} 로 짰어요`);
   } catch (err) {
     showMsg($('#auto-msg'), err.message);
   } finally {

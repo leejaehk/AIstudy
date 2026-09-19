@@ -2977,6 +2977,46 @@ def add_minutes(clock, minutes):
     return f"{total // 60:02d}:{total % 60:02d}"
 
 
+def auto_share(user, total):
+    """하루 시간을 과목별로 어떻게 나눌지 추천한다 (저장은 하지 않는다)."""
+    mine = [s for s in user_subjects(user) if s["name"] != ETC_NAME]
+    if not mine:
+        return None, None, "과목이 없어요"
+    weights = weak_weights(user, mine)
+    share = split_minutes(total, weights, [s["id"] for s in mine])
+    if not share:
+        return None, None, "시간이 너무 짧아요"
+
+    rates = {row["id"]: row["rate"]
+             for row in stats_payload(user)["subjects"]}
+    names = {s["id"]: s["name"] for s in mine}
+    나눔 = [{"id": key, "name": names[key], "minutes": share[key],
+             "weight": weights[key], "rate": rates.get(key)}
+            for key in sorted(share, key=lambda k: -weights[k])]
+    쉬는것 = [{"id": s["id"], "name": s["name"], "minutes": 0,
+               "weight": weights[s["id"]], "rate": rates.get(s["id"])}
+              for s in mine if s["id"] not in share]
+    return 나눔, 쉬는것, None
+
+
+@app.get("/api/plans/auto/suggest")
+@login_required
+def get_auto_suggest(user):
+    """하루 몇 분을 어느 과목에 줄지 미리 보여 준다. 사람이 고쳐도 된다."""
+    try:
+        total = int(request.args.get("minutes", 120))
+    except ValueError:
+        return jsonify({"error": "하루에 몇 분 할지 정해 주세요"}), 400
+    if not AUTO_MIN_MINUTES <= total <= 720:
+        return jsonify({"error": f"하루 공부 시간은 {AUTO_MIN_MINUTES}분에서 "
+                                 f"12시간 사이로 정해 주세요"}), 400
+    나눔, 쉬는것, 잘못 = auto_share(user, total)
+    if 잘못:
+        return jsonify({"error": 잘못}), 400
+    return jsonify({"total": total, "items": 나눔, "rest": 쉬는것,
+                    "min": AUTO_MIN_MINUTES, "step": AUTO_STEP})
+
+
 @app.post("/api/plans/auto")
 @login_required
 def post_plans_auto(user):
@@ -3013,9 +3053,38 @@ def post_plans_auto(user):
         return jsonify({"error": "과목이 없어요"}), 400
 
     weights = weak_weights(user, mine)
-    share = split_minutes(total, weights, [s["id"] for s in mine])
-    if not share:
-        return jsonify({"error": "시간이 너무 짧아요"}), 400
+    있는과목 = {s["id"] for s in mine}
+
+    # 사람이 과목별 시간을 손수 정했으면 그대로 따른다.
+    # 빈 값을 보낸 것도 '손수 정했다'로 본다 (조용히 추천으로 넘어가면
+    # 고른 것과 다르게 짜여서 헷갈린다).
+    손수 = body.get("share")
+    if 손수 is not None:
+        if not isinstance(손수, dict):
+            return jsonify({"error": "과목별 시간이 올바르지 않습니다"}), 400
+        share = {}
+        for key, 분 in 손수.items():
+            if key not in 있는과목:
+                return jsonify({"error": "없는 과목입니다"}), 400
+            try:
+                분 = int(분)
+            except (TypeError, ValueError):
+                return jsonify({"error": "시간은 숫자로 적어 주세요"}), 400
+            if 분 < 0 or 분 > 720:
+                return jsonify({"error": "한 과목은 0분에서 12시간 사이로 "
+                                         "정해 주세요"}), 400
+            if 분:
+                share[key] = 분
+        if not share:
+            return jsonify({"error": "적어도 한 과목은 시간을 주세요"}), 400
+        합 = sum(share.values())
+        if 합 > 720:
+            return jsonify({"error": "하루에 12시간을 넘길 수 없어요"}), 400
+        total = 합
+    else:
+        share = split_minutes(total, weights, [s["id"] for s in mine])
+        if not share:
+            return jsonify({"error": "시간이 너무 짧아요"}), 400
 
     plans.clear_auto(user)                    # 전에 짜 둔 것을 걷어 낸다
     names = {s["id"]: s["name"] for s in mine}
@@ -3033,6 +3102,8 @@ def post_plans_auto(user):
     data = plans_payload(user)
     data["made"] = made
     data["days_left"] = left
+    data["total"] = total
+    data["by_hand"] = bool(손수)
     return jsonify(data), 201
 
 
