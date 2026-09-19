@@ -181,7 +181,7 @@ MENU_CARDS = [
      "color": "#7c3aed", "icon": "pencil"},
     {"key": "wrong", "title": "문제 기록",
      "desc": "푼 문제를 오답·맞힌 것으로 나눠 봅니다",
-     "color": "#f43f5e", "icon": "cross"},
+     "color": "#f59e0b", "icon": "list"},
     {"key": "plan", "title": "학습 계획",
      "desc": "시험까지 남은 기간에 맞춘 계획표",
      "color": "#0ea5e9", "icon": "calendar"},
