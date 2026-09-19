@@ -1724,15 +1724,6 @@ function pickedDayMinutes() {
     + Number($('#auto-mins').value || 0);
 }
 
-/* 이름을 쓸 때 보여 줄 거리 — 이미 넣은 과목은 뺀다 */
-function renderSharePick() {
-  const box = $('#share-names');
-  box.textContent = '';
-  const 이미 = new Set(넣은과목.map((x) => x.id));
-  모든과목.filter((x) => !이미.has(x.id))
-    .forEach((x) => box.appendChild(new Option(x.name)));
-}
-
 /* 띄어쓰기와 대소문자를 무시하고 견준다 */
 function 같은이름(a, b) {
   return (a || '').replace(/\s/g, '').toLowerCase()
@@ -1783,8 +1774,7 @@ function renderShareList() {
     del.addEventListener('click', () => {
       넣은과목 = 넣은과목.filter((x) => x.id !== sub.id);
       renderShareList();
-      renderSharePick();
-      renderShareSum();
+          renderShareSum();
     });
     li.appendChild(del);
 
@@ -1819,7 +1809,6 @@ function renderShare(data) {
   추천 = data.items.map((x) => ({ id: x.id, name: x.name,
                                   rate: x.rate, minutes: x.minutes }));
   renderShareList();
-  renderSharePick();
   renderShareSum();
 }
 
@@ -1836,8 +1825,7 @@ async function loadShare(채울까) {
     // 하루 시간만 바꿨을 때는 넣어 둔 것을 그대로 둔다
     넣은과목 = 채울까 ? 추천.map((x) => ({ ...x })) : 두던것;
     renderShareList();
-    renderSharePick();
-    renderShareSum();
+      renderShareSum();
     showMsg($('#auto-msg'), '');
   } catch (err) {
     showMsg($('#auto-msg'), err.message);
@@ -1848,7 +1836,6 @@ function 과목넣기(과목, 분) {
   넣은과목.push({ ...과목, minutes: 분 });
   $('#share-pick').value = '';
   renderShareList();
-  renderSharePick();
   renderShareSum();
 }
 
