@@ -1700,16 +1700,48 @@ function pickedClock() {
   return `${String(시).padStart(2, '0')}:${String(분).padStart(2, '0')}`;
 }
 
-/* ── 과목마다 몇 분씩 ───────────────────────────────────── */
+/* ── 어떤 과목을 몇 분씩 ─────────────────────────────────
+   과목을 하나씩 넣고 빼는 방식. 처음에는 약한 과목 위주로 채워 두고,
+   마음에 안 들면 빼거나 다른 과목을 넣으면 된다.                 */
 
-let 추천몫 = null;        // 서버가 추천한 과목별 시간
+let 넣은과목 = [];        // [{id, name, minutes, rate}]
+let 모든과목 = [];        // 고를 수 있는 과목 전부
 
-function renderShare(data) {
-  추천몫 = data;
+function fillDayPick() {
+  const 시 = $('#auto-hours');
+  const 분 = $('#auto-mins');
+  if (!시 || 시.options.length) return;
+  for (let i = 0; i <= 12; i += 1) 시.appendChild(new Option(i, i));
+  for (let i = 0; i < 60; i += 5) {
+    분.appendChild(new Option(String(i).padStart(2, '0'), i));
+  }
+  시.value = 2;           // 2시간
+  분.value = 0;
+}
+
+function pickedDayMinutes() {
+  return Number($('#auto-hours').value || 0) * 60
+    + Number($('#auto-mins').value || 0);
+}
+
+function renderSharePick() {
+  const sel = $('#share-pick');
+  sel.textContent = '';
+  const 이미 = new Set(넣은과목.map((x) => x.id));
+  const 남은 = 모든과목.filter((x) => !이미.has(x.id));
+  남은.forEach((x) => sel.appendChild(new Option(x.name, x.id)));
+  const 없음 = 남은.length === 0;
+  sel.disabled = 없음;
+  $('#share-mins').disabled = 없음;
+  $('#share-add').disabled = 없음;
+  if (없음) sel.appendChild(new Option('넣을 과목이 없어요', ''));
+}
+
+function renderShareList() {
   const list = $('#share-list');
   list.textContent = '';
 
-  [...data.items, ...data.rest].forEach((sub) => {
+  넣은과목.forEach((sub) => {
     const li = document.createElement('li');
 
     const name = document.createElement('span');
@@ -1726,12 +1758,14 @@ function renderShare(data) {
     const num = document.createElement('input');
     num.type = 'number';
     num.className = 'share-min';
-    num.min = 0;
+    num.min = 5;
     num.max = 720;
     num.step = 5;
     num.value = sub.minutes;
-    num.dataset.subject = sub.id;
-    num.addEventListener('input', renderShareSum);
+    num.addEventListener('input', () => {
+      sub.minutes = Math.max(0, Number(num.value) || 0);
+      renderShareSum();
+    });
     li.appendChild(num);
 
     const unit = document.createElement('span');
@@ -1739,49 +1773,85 @@ function renderShare(data) {
     unit.textContent = '분';
     li.appendChild(unit);
 
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'del';
+    del.textContent = '×';
+    del.setAttribute('aria-label', `${sub.name} 빼기`);
+    del.addEventListener('click', () => {
+      넣은과목 = 넣은과목.filter((x) => x.id !== sub.id);
+      renderShareList();
+      renderSharePick();
+      renderShareSum();
+    });
+    li.appendChild(del);
+
     list.appendChild(li);
   });
-  renderShareSum();
+
+  $('#share-empty').hidden = 넣은과목.length > 0;
 }
 
 function shareValues() {
   const 몫 = {};
-  document.querySelectorAll('#share-list .share-min').forEach((el) => {
-    const 분 = Number(el.value) || 0;
-    if (분 > 0) 몫[el.dataset.subject] = 분;
-  });
+  넣은과목.forEach((x) => { if (x.minutes > 0) 몫[x.id] = x.minutes; });
   return 몫;
 }
 
 function renderShareSum() {
-  const 몫 = shareValues();
-  const 합 = Object.values(몫).reduce((a, b) => a + b, 0);
+  const 합 = 넣은과목.reduce((a, b) => a + (b.minutes || 0), 0);
   const 시간 = 합 >= 60
     ? `${Math.floor(합 / 60)}시간 ${합 % 60 ? `${합 % 60}분` : ''}`.trim()
     : `${합}분`;
   $('#share-sum').textContent = 합
-    ? `모두 ${시간} · 과목 ${Object.keys(몫).length}개`
+    ? `모두 ${시간} · 과목 ${넣은과목.filter((x) => x.minutes > 0).length}개`
     : '적어도 한 과목은 시간을 주세요';
 }
 
+function renderShare(data) {
+  모든과목 = [...data.items, ...data.rest]
+    .map((x) => ({ id: x.id, name: x.name, rate: x.rate }));
+  넣은과목 = data.items.map((x) => ({ id: x.id, name: x.name,
+                                      rate: x.rate, minutes: x.minutes }));
+  renderShareList();
+  renderSharePick();
+  renderShareSum();
+}
+
 async function loadShare() {
+  const 하루 = pickedDayMinutes();
+  if (하루 < 20) {
+    showMsg($('#auto-msg'), '하루 공부 시간은 20분 이상으로 정해 주세요');
+    return;
+  }
   try {
-    renderShare(await api('/api/plans/auto/suggest?minutes='
-      + Number($('#auto-minutes').value)));
+    renderShare(await api(`/api/plans/auto/suggest?minutes=${하루}`));
     showMsg($('#auto-msg'), '');
   } catch (err) {
-    $('#share-list').textContent = '';
-    $('#share-sum').textContent = '';
     showMsg($('#auto-msg'), err.message);
   }
 }
 
-on('#auto-minutes', 'change', loadShare);
+on('#share-add', 'click', () => {
+  const id = $('#share-pick').value;
+  if (!id) return;
+  const 분 = Math.max(5, Number($('#share-mins').value) || 30);
+  const 찾음 = 모든과목.find((x) => x.id === id);
+  if (!찾음) return;
+  넣은과목.push({ ...찾음, minutes: 분 });
+  renderShareList();
+  renderSharePick();
+  renderShareSum();
+});
+
+on('#auto-hours', 'change', loadShare);
+on('#auto-mins', 'change', loadShare);
 on('#share-reset', 'click', loadShare);
 on('#exam-card', 'toggle', (e) => {
   if (e.target.open) {
     fillClockPick();
-    if (!추천몫) loadShare();
+    fillDayPick();
+    if (!모든과목.length) loadShare();
   }
 });
 
@@ -1822,7 +1892,7 @@ $('#exam-save').addEventListener('click', async (e) => {
       return;
     }
     data = await api('/api/plans/auto', 'POST', {
-      minutes: Number($('#auto-minutes').value),
+      minutes: pickedDayMinutes(),
       start: pickedClock(),
       repeat: $('#auto-repeat').value,
       share: 몫,
