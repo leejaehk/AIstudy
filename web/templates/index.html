@@ -506,36 +506,37 @@
     <!-- 문제 풀기 -->
     <div class="panel" id="panel-quiz" hidden>
 
+      <!-- 찾기는 과목을 고르기 전에도 뒤에도 늘 보인다 -->
+      <form class="card find-card" id="find-form">
+        <input id="find-word" type="search" maxlength="40" autocomplete="off"
+               placeholder="풀었던 문제 찾기 (문제 · 정답 · 해설에서)">
+        <div class="add-row">
+          <select id="find-where" aria-label="어디서 찾을지"></select>
+          <input id="find-day" type="date" aria-label="푼 날짜">
+        </div>
+        <p class="tiny-label">날짜가 기억나지 않으면 비워 두세요 —
+          비슷한 문제들도 함께 찾아 드립니다.</p>
+        <button class="btn-add" type="submit">찾기</button>
+      </form>
+
+      <div id="find-result" hidden>
+        <div class="wrong-head">
+          <p class="quiz-count" id="find-count">0개</p>
+          <button type="button" class="link-btn" id="find-clear">닫기</button>
+        </div>
+        <ul class="quiz-list" id="find-list"></ul>
+        <p class="empty-note" id="find-empty" hidden>
+          꼭 맞는 문제가 없어요.
+        </p>
+
+        <div id="similar-box" hidden>
+          <h3 class="section-label" id="similar-title">비슷한 문제</h3>
+          <ul class="quiz-list" id="similar-list"></ul>
+        </div>
+      </div>
+
       <!-- 과목 고르기 -->
       <div id="quiz-subjects">
-        <form class="card find-card" id="find-form">
-          <input id="find-word" type="search" maxlength="40" autocomplete="off"
-                 placeholder="풀었던 문제 찾기 (문제 · 정답 · 해설에서)">
-          <div class="add-row">
-            <select id="find-where" aria-label="어디서 찾을지"></select>
-            <input id="find-day" type="date" aria-label="푼 날짜">
-          </div>
-          <p class="tiny-label">날짜가 기억나지 않으면 비워 두세요 —
-            비슷한 문제들도 함께 찾아 드립니다.</p>
-          <button class="btn-add" type="submit">찾기</button>
-        </form>
-
-        <div id="find-result" hidden>
-          <div class="wrong-head">
-            <p class="quiz-count" id="find-count">0개</p>
-            <button type="button" class="link-btn" id="find-clear">닫기</button>
-          </div>
-          <ul class="quiz-list" id="find-list"></ul>
-          <p class="empty-note" id="find-empty" hidden>
-            꼭 맞는 문제가 없어요.
-          </p>
-
-          <div id="similar-box" hidden>
-            <h3 class="section-label" id="similar-title">비슷한 문제</h3>
-            <ul class="quiz-list" id="similar-list"></ul>
-          </div>
-        </div>
-
         <h3 class="section-label">과목을 고르세요
           <button type="button" class="link-btn" id="edit-subjects">과목 편집</button>
         </h3>

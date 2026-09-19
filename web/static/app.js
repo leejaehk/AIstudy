@@ -684,7 +684,14 @@ function renderQuiz() {
   $('#quiz-start').disabled = items.length === 0 || full;
   $('#quiz-start').textContent = full ? '오늘 다 씀' : '풀기 시작';
   $('#quiz-empty').hidden = items.length > 0;
-  fillList($('#quiz-list'), items, true);
+
+  // 과목을 고르기 전에는 이 목록이 화면에 없다. 그런데도 그리면 문제가 많은
+  // 사람은 500줄을 괜히 만들게 되어 (줄마다 과목 고르는 칸까지) 느려진다.
+  if (currentSubject) {
+    fillList($('#quiz-list'), items, true);
+  } else {
+    $('#quiz-list').textContent = '';
+  }
 
   renderReview();
 }
@@ -1013,6 +1020,12 @@ function showQuizView(view) {
   $('#quiz-subjects').hidden = view !== 'subjects';
   $('#quiz-home').hidden = view !== 'home';
   $('#quiz-play').hidden = view !== 'play';
+
+  // 찾기 칸은 과목을 고르기 전에도 뒤에도 보이지만, 문제를 푸는 동안에는
+  // 눈에 걸리므로 잠시 치운다
+  const 풀이중 = view === 'play';
+  $('#find-form').hidden = 풀이중;
+  if (풀이중) $('#find-result').hidden = true;
 }
 
 function showQuizHome() {
