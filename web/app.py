@@ -15,7 +15,7 @@ import threading
 import time
 import uuid
 
-from flask import (Flask, jsonify, make_response, render_template,
+from flask import (Flask, g, jsonify, make_response, render_template,
                    request, session,
                    url_for)
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -203,9 +203,19 @@ def load_json(path, default):
 
 
 def save_json(path, data):
+    """먼저 임시 파일에 쓰고 나서 바꿔 끼운다.
+
+    바로 덮어쓰면 쓰는 도중에 전기가 나가거나 앱이 꺼졌을 때 파일이 반쯤
+    쓰인 채로 남아 그동안의 기록이 통째로 날아간다. 임시 파일에 다 쓴 뒤
+    이름만 바꾸면, 어느 쪽이든 온전한 파일이 남는다.
+    """
+    spare = path + ".tmp"
     try:
-        with open(path, "w", encoding="utf-8") as f:
+        with open(spare, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=1)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(spare, path)
     except OSError:
         pass  # 저장 실패해도 화면 사용에는 지장 없음
 
@@ -1360,6 +1370,29 @@ def admin_required(view):
             return jsonify({"error": "관리자만 볼 수 있습니다"}), 403
         return view(user, *args, **kwargs)
     return wrapped
+
+
+# --- 한 번에 하나씩만 -------------------------------------------------------
+#
+# 기록을 JSON 파일에 담다 보니, 두 요청이 같은 파일을 동시에 고치면 한쪽이
+# 통째로 사라진다 (둘 다 옛 내용을 읽어서 각자 고친 뒤 덮어쓰기 때문).
+# PC와 폰에서 같이 쓰면 실제로 일어날 수 있는 일이라, 요청을 한 번에 하나씩
+# 처리하게 한다. 한 요청이 아주 짧아서 기다림은 느껴지지 않는다.
+
+_one_at_a_time = threading.Lock()
+
+
+@app.before_request
+def hold_lock():
+    _one_at_a_time.acquire()
+    g.holding_lock = True
+
+
+@app.teardown_request
+def free_lock(err=None):
+    if getattr(g, "holding_lock", False):
+        g.holding_lock = False
+        _one_at_a_time.release()
 
 
 # --- 화면 -------------------------------------------------------------------
