@@ -1254,7 +1254,8 @@ button.tier-chip { border: 0; cursor: pointer; font-family: inherit; }
   margin: 20px 24px 0;
 }
 .wrong-head .quiz-count { margin: 0; }
-.wrong-head .link-btn { margin-left: auto; }
+.wrong-head #wrong-find { margin-left: auto; }
+.wrong-head #wrong-start { margin-left: 12px; }
 
 .quiz-body .r {
   font-size: 11.5px;
@@ -1553,3 +1554,27 @@ button.tier-chip { border: 0; cursor: pointer; font-family: inherit; }
   margin: 0 0 0 10px;
   padding: 7px 14px;
 }
+
+/* ── 문제 기록 (상태별) ───────────────────────────────── */
+
+.state-chips { margin-top: 14px; }
+.chip-btn[disabled] { opacity: .45; cursor: default; }
+.chip-btn.st-wrong.on { background: #f43f5e; border-color: #f43f5e; }
+.chip-btn.st-fixed.on { background: #10b981; border-color: #10b981; }
+.chip-btn.st-clean.on { background: #0ea5e9; border-color: #0ea5e9; }
+
+.state-tag {
+  justify-self: start;
+  margin-top: 2px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+}
+.state-tag.st-wrong { background: #ffe4e6; color: #be123c; }
+.state-tag.st-fixed { background: #d1fae5; color: #047857; }
+.state-tag.st-clean { background: #e0f2fe; color: #0369a1; }
+
+[data-dark="on"] .state-tag.st-wrong { background: #3a1717; color: #fda4af; }
+[data-dark="on"] .state-tag.st-fixed { background: #10321f; color: #6ee7b7; }
+[data-dark="on"] .state-tag.st-clean { background: #10283a; color: #7dd3fc; }

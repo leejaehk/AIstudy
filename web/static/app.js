@@ -693,7 +693,7 @@ function renderQuiz() {
     $('#quiz-list').textContent = '';
   }
 
-  renderReview();
+  renderDone();
 }
 
 function daysUntil(day) {
@@ -713,15 +713,64 @@ function dueLabel(item) {
 }
 
 /* 오답 노트 위쪽 — 오늘 복습할 것 */
-let wrongFilter = '';       // 오답 노트에서 보고 있는 과목 ('' = 전체)
+let wrongFilter = '';       // 문제 기록에서 보고 있는 과목 ('' = 전체)
+let stateFilter = '';       // 상태 ('' = 전체 | wrong | fixed | clean)
 
-/* 오답 노트 과목 고르기 — 과목이 섞여 있으면 찾기 어렵다 */
-function renderWrongFilter(wrong) {
+const STATE_ORDER = ['wrong', 'fixed', 'clean'];
+
+/* 푼 문제만 고른다 (문제 기록 화면이 보는 것) */
+function doneItems() {
+  return quizData.done || [];
+}
+
+function pickState(list) {
+  return stateFilter ? list.filter((i) => i.state === stateFilter) : list;
+}
+
+function pickSubject(list) {
+  return wrongFilter
+    ? list.filter((i) => (i.main || i.subject) === wrongFilter)
+    : list;
+}
+
+function filterWrong(list) {         // 복습에서도 고른 과목만 풀 수 있게
+  return pickSubject(list);
+}
+
+/* 상태 고르기 — 오답 / 다시 맞힘 / 한 번에 맞힘 */
+function renderStateFilter(counts) {
+  const box = $('#state-filter');
+  box.textContent = '';
+  const 이름 = {};
+  (quizData.states || []).forEach((st) => { 이름[st.key] = st.name; });
+
+  const add = (key, label, n, cls) => {
+    const li = document.createElement('li');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = `chip-btn ${cls}` + (stateFilter === key ? ' on' : '');
+    btn.textContent = `${label} ${n}`;
+    btn.disabled = n === 0 && key !== '';
+    btn.addEventListener('click', () => {
+      stateFilter = key;
+      renderDone();
+    });
+    li.appendChild(btn);
+    box.appendChild(li);
+  };
+
+  add('', '전체', counts.all, 'st-all');
+  STATE_ORDER.forEach((key) =>
+    add(key, 이름[key] || key, counts[key] || 0, `st-${key}`));
+}
+
+/* 과목 고르기 — 지금 보고 있는 상태 안에서 */
+function renderWrongFilter(list) {
   const box = $('#wrong-filter');
   box.textContent = '';
 
   const counts = {};
-  wrong.forEach((w) => {
+  list.forEach((w) => {
     const key = w.main || w.subject;
     counts[key] = (counts[key] || 0) + 1;
   });
@@ -731,7 +780,7 @@ function renderWrongFilter(wrong) {
     wrongFilter = '';
     return;
   }
-  if (wrongFilter && !counts[wrongFilter]) wrongFilter = '';   // 다 지워진 과목
+  if (wrongFilter && !counts[wrongFilter]) wrongFilter = '';
 
   const add = (key, label, n) => {
     const li = document.createElement('li');
@@ -741,26 +790,27 @@ function renderWrongFilter(wrong) {
     btn.textContent = `${label} ${n}`;
     btn.addEventListener('click', () => {
       wrongFilter = key;
-      renderReview();
+      renderDone();
     });
     li.appendChild(btn);
     box.appendChild(li);
   };
 
-  add('', '전체', wrong.length);
+  add('', '모든 과목', list.length);
   keys.sort((a, b) => counts[b] - counts[a])
       .forEach((k) => add(k, SUBJECT_NAMES[k] || '지운 과목', counts[k]));
 }
 
-function filterWrong(list) {
-  if (!wrongFilter) return list;
-  return list.filter((w) => (w.main || w.subject) === wrongFilter);
-}
+/* 문제 기록 — 푼 문제를 상태·과목으로 나눠 본다 */
+function renderDone() {
+  const 전부 = doneItems();
+  const counts = quizData.done_counts || { all: 0 };
+  renderStateFilter(counts);
 
-function renderReview() {
-  const all = quizData.wrong || [];
-  renderWrongFilter(all);
-  const wrong = filterWrong(all);
+  const 상태고름 = pickState(전부);
+  renderWrongFilter(상태고름);
+  const 보일것 = pickSubject(상태고름);
+
   const due = filterWrong((quizData.review || {}).due || []);
   const 이과목 = wrongFilter ? `${SUBJECT_NAMES[wrongFilter] || ''} ` : '';
 
@@ -769,24 +819,29 @@ function renderReview() {
     : `오늘 복습할 ${이과목}문제가 없어요`;
   $('#review-sub').textContent = due.length
     ? '복습은 하루 횟수를 쓰지 않아요'
-    : (wrong.length ? '다음 복습일까지 기다리거나, 아래에서 전부 다시 풀 수 있어요'
+    : (counts.wrong ? '다음 복습일까지 기다리면 됩니다'
                     : '틀린 문제가 없어요');
   $('#review-start').disabled = due.length === 0;
   $('#review-start').textContent = due.length ? '복습 시작' : '복습 없음';
 
-  $('#wrong-count').textContent = wrongFilter
-    ? `${SUBJECT_NAMES[wrongFilter] || ''} ${wrong.length}개 / 전체 ${all.length}개`
-    : `틀린 문제 ${all.length}개`;
-  $('#wrong-start').hidden = wrong.length === 0;
-  $('#wrong-empty').hidden = all.length > 0;
-  fillList($('#wrong-list'), wrong, false);
+  const 상태이름 = stateFilter
+    ? (quizData.states || []).find((s) => s.key === stateFilter)
+    : null;
+  $('#wrong-count').textContent =
+    `${상태이름 ? 상태이름.name : '푼 문제'} ${보일것.length}개`
+    + (보일것.length !== counts.all ? ` / 모두 ${counts.all}개` : '')
+    + (counts.todo ? ` · 아직 안 푼 것 ${counts.todo}개` : '');
+
+  $('#wrong-start').hidden = 보일것.length === 0;
+  $('#wrong-empty').hidden = counts.all > 0;
+  fillList($('#wrong-list'), 보일것, false);
 
   const hint = $('#review-hint');
   const steps = ((quizData.review || {}).steps || []).join('일 · ');
-  hint.textContent = all.length
-    ? `맞힐 때마다 ${steps}일 뒤로 멀어지고, 끝까지 맞히면 오답 노트에서 빠집니다`
+  hint.textContent = counts.wrong
+    ? `오답은 맞힐 때마다 ${steps}일 뒤로 멀어지고, 끝까지 맞히면 '다시 맞힘' 으로 옮겨집니다`
     : '';
-  hint.hidden = !all.length;
+  hint.hidden = !counts.wrong;
 }
 
 function fillList(list, items, withStat) {
@@ -808,8 +863,15 @@ function fillList(list, items, withStat) {
     const subject = SUBJECT_NAMES[item.subject];
     a.textContent = (withStat || !subject)
       ? `정답 ${item.answer}`
-      : `${subject} · 정답 ${item.answer}`;   // 오답 노트는 과목이 섞여 있다
+      : `${subject} · 정답 ${item.answer}`;   // 문제 기록은 과목이 섞여 있다
     body.appendChild(a);
+
+    if (!withStat && item.state_name) {
+      const tag = document.createElement('span');
+      tag.className = `state-tag st-${item.state}`;
+      tag.textContent = item.state_name;
+      body.appendChild(tag);
+    }
 
     if (item.note) {
       const n = document.createElement('span');
@@ -817,13 +879,14 @@ function fillList(list, items, withStat) {
       n.textContent = item.note;
       body.appendChild(n);
     }
-    if (!withStat && item.wrong) {          // 오답 노트 — 복습 상태
+    if (!withStat && item.state) {          // 문제 기록 — 상태와 복습
       const r = document.createElement('span');
       r.className = 'r' + (item.due_today ? ' now' : '');
       r.textContent = [
-        dueLabel(item),
-        `복습 ${item.stage} / ${item.steps}`,
-        item.misses > 1 ? `${item.misses}번 틀림` : null,
+        item.state === 'wrong' ? dueLabel(item) : null,
+        item.state === 'wrong' ? `복습 ${item.stage} / ${item.steps}` : null,
+        item.last_at ? `${item.last_at}에 품` : null,
+        item.tries ? `${item.tries}번 풀어 ${item.misses}번 틀림` : null,
       ].filter(Boolean).join(' · ');
       body.appendChild(r);
     }
@@ -1172,7 +1235,22 @@ function startReview(items) {
 
 on('#review-start', 'click', () =>
   startReview(filterWrong((quizData.review || {}).due || [])));
-on('#wrong-start', 'click', () => startReview(filterWrong(quizData.wrong || [])));
+on('#wrong-start', 'click', () =>
+  startReview(pickSubject(pickState(doneItems()))));
+
+/* 오답 노트에서 '문제 찾기' 를 누르면 문제 풀기의 찾기 칸으로 데려간다.
+   틀린 문제를 보다가 "그때 그 문제" 를 찾고 싶어지는 때가 많기 때문. */
+on('#wrong-find', 'click', () => {
+  currentSubject = null;
+  go('quiz');
+  setTimeout(() => {
+    const box = $('#find-word');
+    if (box) {
+      box.scrollIntoView({ block: 'center' });
+      box.focus();
+    }
+  }, 80);
+});
 
 /* ── 학습 계획 ─────────────────────────────────────────── */
 

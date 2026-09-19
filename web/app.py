@@ -179,8 +179,8 @@ MENU_CARDS = [
     {"key": "quiz", "title": "문제 풀기",
      "desc": "문제를 풀고 바로 채점하기",
      "color": "#7c3aed", "icon": "pencil"},
-    {"key": "wrong", "title": "오답 노트",
-     "desc": "틀린 문제가 자동으로 모입니다",
+    {"key": "wrong", "title": "문제 기록",
+     "desc": "푼 문제를 오답·맞힌 것으로 나눠 봅니다",
      "color": "#f43f5e", "icon": "cross"},
     {"key": "plan", "title": "학습 계획",
      "desc": "시험까지 남은 기간에 맞춘 계획표",
@@ -2260,6 +2260,55 @@ def sort_wrong(items):
     return sorted(items, key=lambda i: (i["due_in"], -i.get("misses", 0)))
 
 
+def solved_state(item):
+    """푼 문제가 지금 어떤 상태인지.
+
+      wrong — 마지막에 틀림 (오답 노트에 있는 것)
+      fixed — 틀렸다가 다시 풀어서 맞힘
+      clean — 한 번도 안 틀리고 맞힘
+    """
+    if item.get("wrong"):
+        return "wrong"
+    return "fixed" if item.get("misses") else "clean"
+
+
+STATE_NAMES = {"wrong": "오답", "fixed": "다시 맞힘", "clean": "한 번에 맞힘"}
+
+
+def done_list(user, every, names):
+    """한 번이라도 푼 문제를 상태와 함께 모은다.
+
+    오답 노트를 '푼 문제를 모아 보는 곳' 으로 쓰기 위한 것. 아직 안 푼 문제는
+    넣지 않습니다.
+    """
+    나온것 = []
+    for item in every:
+        if not (item.get("tries") or item.get("wrong")):
+            continue                     # 아직 한 번도 안 풀었다
+        상태 = solved_state(item)
+        줄 = review_info(item) if 상태 == "wrong" else dict(item)
+        줄["state"] = 상태
+        줄["state_name"] = STATE_NAMES[상태]
+        줄["subject_name"] = names.get(item.get("subject"), "지운 과목")
+        줄["main_name"] = names.get(item.get("main"))
+        줄.setdefault("due_in", None)
+        줄.setdefault("due_today", False)
+        줄.setdefault("stage", item.get("stage", 0))
+        줄.setdefault("steps", len(REVIEW_STEPS))
+        줄["last_at"] = item.get("last_at")
+        줄["tries"] = item.get("tries", 0)
+        줄["misses"] = item.get("misses", 0)
+        나온것.append(줄)
+
+    # 먼저 최근에 푼 순으로 늘어놓고,
+    나온것.sort(key=lambda i: i.get("last_at") or "", reverse=True)
+    # 그 순서를 지키면서 오답을 맨 위로, 오답끼리는 오늘 볼 것부터
+    차례 = {"wrong": 0, "fixed": 1, "clean": 2}
+    나온것.sort(key=lambda i: (차례[i["state"]],
+                               i["due_in"] if i["state"] == "wrong" else 0))
+    return 나온것
+
+
 def quiz_payload(user, subject=None):
     """subject 를 주면 그 과목만, 아니면 전체를 돌려준다."""
     every = quiz.all(user)
@@ -2273,11 +2322,22 @@ def quiz_payload(user, subject=None):
             counts[key] += 1
             if item.get("wrong"):
                 wrongs[key] += 1
+    names = {sub["id"]: sub["name"] for sub in mine}
     wrong = sort_wrong([review_info(i) for i in every if i.get("wrong")])
+    done = done_list(user, every, names)
     return {
         "subject": subject,
         "items": items,
-        "wrong": wrong,                       # 오답 노트는 전 과목
+        "wrong": wrong,                       # 오답만 (전 과목)
+        "done": done,                         # 한 번이라도 푼 문제 (상태 붙여서)
+        "done_counts": {
+            "all": len(done),
+            "wrong": sum(1 for i in done if i["state"] == "wrong"),
+            "fixed": sum(1 for i in done if i["state"] == "fixed"),
+            "clean": sum(1 for i in done if i["state"] == "clean"),
+            "todo": len(every) - len(done),   # 아직 안 푼 문제
+        },
+        "states": [{"key": k, "name": v} for k, v in STATE_NAMES.items()],
         "review": {                           # 복습 — 오늘 볼 것
             "due": [i for i in wrong if i["due_today"]],
             "steps": REVIEW_STEPS,

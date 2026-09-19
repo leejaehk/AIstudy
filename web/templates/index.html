@@ -641,15 +641,17 @@
       </div>
 
       <div class="wrong-head">
-        <p class="quiz-count" id="wrong-count">틀린 문제 0개</p>
-        <button type="button" class="link-btn" id="wrong-start">전부 다시 풀기</button>
+        <p class="quiz-count" id="wrong-count">푼 문제 0개</p>
+        <button type="button" class="link-btn" id="wrong-find">문제 찾기 ›</button>
+        <button type="button" class="link-btn" id="wrong-start">이 목록 풀기</button>
       </div>
 
+      <ul class="chips state-chips" id="state-filter"></ul>
       <ul class="chips" id="wrong-filter"></ul>
 
       <ul class="quiz-list" id="wrong-list"></ul>
       <p class="empty-note" id="wrong-empty" hidden>
-        틀린 문제가 없어요.<br>문제 풀기에서 틀리면 여기에 모입니다.
+        아직 푼 문제가 없어요.<br>문제 풀기에서 풀면 여기에 모입니다.
       </p>
       <p class="foot-note" id="review-hint" hidden></p>
     </div>
