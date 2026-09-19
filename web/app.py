@@ -1149,6 +1149,8 @@ class Plans:
             if not every and not self.shows_today(item):
                 continue
             items.append({**item, "done_at": self.done_today(item),
+                          "spent_today": (item.get("spent") or {}).get(
+                              today_str(), 0),
                           "repeat_name": REPEAT_KEYS.get(
                               item.get("repeat") or "", ""),
                           "weekday_name": (
@@ -1165,7 +1167,7 @@ class Plans:
         return None
 
     def add(self, user, text, time=None, end=None, subject=None, repeat=None,
-            until=None, auto=False):
+            until=None, auto=False, minutes=None):
         row = self._load(user)
         if len(row["items"]) >= self.MAX_ITEMS:
             raise ValueError("계획이 너무 많습니다")
@@ -1181,6 +1183,8 @@ class Plans:
                         if repeat == "weekly" else None),
             "until": until,       # 이 날까지만 보인다 (시험일 등). 없어도 됨
             "auto": bool(auto),   # 자동으로 짠 계획인지 (다시 짤 때 지운다)
+            "minutes": minutes,   # 몇 분짜리 계획인지 (시험 계획에만 있음)
+            "spent": {},          # 날짜별로 실제 공부한 분 {"2026-09-19": 22}
             "done_days": [] if repeat else None,
             "done_at": None,
         }
@@ -1231,6 +1235,32 @@ class Plans:
         if done:
             days.append(today_str())
         item["done_days"] = sorted(days)[-self.KEEP_DONE:]
+
+    KEEP_SPENT = 90       # 공부한 시간을 며칠치까지 남길지
+
+    def add_spent(self, user, item_id, minutes):
+        """이 계획에 오늘 공부한 시간을 더한다.
+
+        정해 둔 시간을 채우면 해낸 것으로 표시합니다.
+        """
+        row = self._load(user)
+        item = self._find(row, item_id)
+        if item is None:
+            return None
+        오늘 = today_str()
+        했던것 = item.get("spent") or {}
+        했던것[오늘] = min(24 * 60, 했던것.get(오늘, 0) + int(minutes))
+        for day in sorted(했던것)[:-self.KEEP_SPENT]:
+            했던것.pop(day, None)
+        item["spent"] = 했던것
+
+        목표 = item.get("minutes")
+        채움 = bool(목표) and 했던것[오늘] >= 목표
+        if 채움 and not self.done_today(item):
+            self._mark(item, True)
+        self._save(user, row)
+        return {**item, "done_at": self.done_today(item),
+                "spent_today": 했던것[오늘], "filled": 채움}
 
     def check_subject(self, user, subject):
         """그 과목의 오늘 계획 중 아직 못 한 것 하나를 해낸 것으로 표시한다.
@@ -2715,7 +2745,7 @@ STATS_RANGE = 30       # 정답률·약점을 볼 기간
 
 def blank_day():
     return {"solved": 0, "correct": 0, "reviewed": 0,
-            "made": 0, "asked": 0, "planned": 0}
+            "made": 0, "asked": 0, "planned": 0, "minutes": 0}
 
 
 def sum_days(days, since):
@@ -2994,7 +3024,8 @@ def post_plans_auto(user):
         minutes = share[key]
         end = add_minutes(clock, minutes)
         item = plans.add(user, f"{names[key]} {minutes}분", clock, end,
-                         key, repeat, until=exam["date"], auto=True)
+                         key, repeat, until=exam["date"], auto=True,
+                         minutes=minutes)
         made.append({**item, "minutes": minutes, "name": names[key],
                      "weight": weights[key]})
         clock = end
@@ -3003,6 +3034,36 @@ def post_plans_auto(user):
     data["made"] = made
     data["days_left"] = left
     return jsonify(data), 201
+
+
+@app.post("/api/plans/<item_id>/spend")
+@login_required
+def post_plan_spend(user, item_id):
+    """이 계획으로 공부한 시간을 적는다 (시간 재기).
+
+    계획에 적어 둔 시간을 채우면 해낸 것으로 표시하고, 공부 기록에도 남깁니다.
+    """
+    body = request.get_json(silent=True) or {}
+    try:
+        minutes = int(body.get("minutes"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "잰 시간이 올바르지 않습니다"}), 400
+    if not 1 <= minutes <= 24 * 60:
+        return jsonify({"error": "1분에서 24시간 사이만 적을 수 있어요"}), 400
+
+    done = plans.add_spent(user, item_id, minutes)
+    if done is None:
+        return jsonify({"error": "없는 계획입니다"}), 404
+
+    stats.add(user, subject=done.get("subject"), minutes=minutes)
+    if done["filled"]:
+        stats.add(user, planned=1)
+
+    data = plans_payload(user)
+    data["spent_today"] = done["spent_today"]
+    data["filled"] = done["filled"]
+    data["text"] = done.get("text")
+    return jsonify(data)
 
 
 @app.delete("/api/plans/auto")

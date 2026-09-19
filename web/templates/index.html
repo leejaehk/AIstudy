@@ -420,23 +420,26 @@
     <!-- 학습 계획 화면 -->
     <div class="panel" id="panel-plan" hidden>
 
-      <form class="card add-card" id="plan-form">
-        <input id="plan-text" type="text" maxlength="60" required
-               placeholder="무엇을 공부할까요?" autocomplete="off">
-        <div class="add-row time-row">
-          <input id="plan-time" type="time" aria-label="시작 시간">
-          <span class="tilde">~</span>
-          <input id="plan-end" type="time" aria-label="끝 시간">
-        </div>
-        <div class="add-row">
-          <select id="plan-subject" aria-label="과목"></select>
-          <select id="plan-repeat" aria-label="반복"></select>
-        </div>
-        <p class="tiny-label">과목을 고르면 바로 풀러 갈 수 있고,
-          그 과목을 풀면 계획이 저절로 체크됩니다.
-          반복으로 두면 날마다 체크가 새로 시작돼요.</p>
-        <button class="btn-add" type="submit">추가</button>
-      </form>
+      <details class="card add-card" id="plan-add-box">
+        <summary>계획 추가</summary>
+        <form class="exam-body" id="plan-form">
+          <input id="plan-text" type="text" maxlength="60" required
+                 placeholder="무엇을 공부할까요?" autocomplete="off">
+          <div class="add-row time-row">
+            <input id="plan-time" type="time" aria-label="시작 시간">
+            <span class="tilde">~</span>
+            <input id="plan-end" type="time" aria-label="끝 시간">
+          </div>
+          <div class="add-row">
+            <select id="plan-subject" aria-label="과목"></select>
+            <select id="plan-repeat" aria-label="반복"></select>
+          </div>
+          <p class="tiny-label">과목을 고르면 바로 풀러 갈 수 있고,
+            그 과목을 풀면 계획이 저절로 체크됩니다.
+            반복으로 두면 날마다 체크가 새로 시작돼요.</p>
+          <button class="btn-add" type="submit">추가</button>
+        </form>
+      </details>
 
       <ul class="plan-list" id="plan-list"></ul>
 

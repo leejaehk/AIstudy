@@ -1320,10 +1320,16 @@ function renderStatToday(data) {
   const row = $('#stat-today');
   row.textContent = '';
   const t = data.today;
+  const 분 = t.minutes || 0;
+  const 시간 = 분 >= 60
+    ? [Math.floor(분 / 60) + (분 % 60 ? `:${String(분 % 60).padStart(2, '0')}` : ''),
+       분 % 60 ? '' : '시간']
+    : [분, '분'];
   [['오늘 푼 문제', t.solved, '개'],
    ['맞힌 문제', t.correct, '개'],
    ['복습', t.reviewed, '개'],
-   ['해낸 계획', t.planned, '개']].forEach(([label, v, unit]) =>
+   ['해낸 계획', t.planned, '개'],
+   ['공부한 시간', 시간[0], 시간[1]]].forEach(([label, v, unit]) =>
     row.appendChild(statTile(label, v, unit)));
 
   const streak = $('#stat-streak');
@@ -1360,8 +1366,13 @@ function renderStatBars(data) {
   });
 
   const w = data.week;
+  const 주분 = w.minutes || 0;
+  const 주시간 = 주분 >= 60
+    ? `${Math.floor(주분 / 60)}시간 ${주분 % 60 ? `${주분 % 60}분` : ''}`.trim()
+    : `${주분}분`;
   $('#stat-week').textContent = w.solved
     ? `이번 주 ${w.solved}문제 · 정답률 ${data.week_rate}%`
+      + (주분 ? ` · 공부 ${주시간}` : '')
       + (w.asked ? ` · 질문 ${w.asked}번` : '')
     : '이번 주에는 아직 푼 문제가 없어요';
 }
@@ -1472,6 +1483,90 @@ function renderDday(exam) {
   el.hidden = false;
 }
 
+/* ── 공부 시간 재기 ─────────────────────────────────────────
+   시험 계획을 짠 뒤에만 나온다. 계획에 적힌 시간을 채우면 저절로 체크된다. */
+
+let 재는중 = null;      // { id, 시작, 그리기 } — 한 번에 하나만 잰다
+
+function 분초(초) {
+  const m = Math.floor(초 / 60);
+  const s = 초 % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function spentLabel(item) {
+  const 한것 = item.spent_today || 0;
+  const 할것 = item.minutes || 0;
+  if (!할것) return 한것 ? `${한것}분 했어요` : '';
+  return `${한것} / ${할것}분`;
+}
+
+function timerRow(item) {
+  const box = document.createElement('div');
+  box.className = 'timer-row';
+
+  const 글 = document.createElement('span');
+  글.className = 'timer-text';
+  글.textContent = spentLabel(item);
+  box.appendChild(글);
+
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'timer-btn';
+  const 이것재는중 = 재는중 && 재는중.id === item.id;
+  btn.textContent = 이것재는중 ? '■ 그만' : '▶ 시간 재기';
+  if (이것재는중) btn.classList.add('on');
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (재는중 && 재는중.id === item.id) 시간멈추기();
+    else 시간재기(item);
+  });
+  box.appendChild(btn);
+
+  if (이것재는중) {
+    재는중.그리기 = (초) => {
+      글.textContent = `재는 중 ${분초(초)}`
+        + (item.minutes ? ` · 목표 ${item.minutes}분` : '');
+    };
+    재는중.그리기(Math.round((Date.now() - 재는중.시작) / 1000));
+  }
+  return box;
+}
+
+function 시간재기(item) {
+  if (재는중) 시간멈추기();
+  재는중 = { id: item.id, 시작: Date.now(), 그리기: null };
+  재는중.박자 = setInterval(() => {
+    if (재는중 && 재는중.그리기) {
+      재는중.그리기(Math.round((Date.now() - 재는중.시작) / 1000));
+    }
+  }, 1000);
+  loadPlans();
+}
+
+async function 시간멈추기() {
+  if (!재는중) return;
+  const { id, 시작, 박자 } = 재는중;
+  clearInterval(박자);
+  재는중 = null;
+  const 분 = Math.round((Date.now() - 시작) / 60000);
+  if (분 < 1) {
+    showPlanError('1분이 안 되어 적지 않았어요');
+    loadPlans();
+    return;
+  }
+  try {
+    const data = await api(`/api/plans/${id}/spend`, 'POST', { minutes: 분 });
+    renderPlans(data);
+    loadStats();
+    showPlanError(data.filled
+      ? `${분}분 했어요. '${data.text}' 을(를) 다 채웠습니다`
+      : `${분}분 적었어요 (오늘 모두 ${data.spent_today}분)`);
+  } catch (err) {
+    showPlanError(err.message);
+  }
+}
+
 function planRow(item) {
   const li = document.createElement('li');
   li.className = 'plan-item' + (item.done_at ? ' done' : '');
@@ -1498,6 +1593,9 @@ function planRow(item) {
     tag.className = 'plan-auto';
     tag.textContent = '자동';
     body.appendChild(tag);
+
+    // 시험 계획에만 시간 재기를 붙인다. 계획한 시간과 실제를 견주기 위한 것.
+    body.appendChild(timerRow(item));
   }
 
   if (item.repeat_name) {
