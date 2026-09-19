@@ -1724,17 +1724,19 @@ function pickedDayMinutes() {
     + Number($('#auto-mins').value || 0);
 }
 
+/* 이름을 쓸 때 보여 줄 거리 — 이미 넣은 과목은 뺀다 */
 function renderSharePick() {
-  const sel = $('#share-pick');
-  sel.textContent = '';
+  const box = $('#share-names');
+  box.textContent = '';
   const 이미 = new Set(넣은과목.map((x) => x.id));
-  const 남은 = 모든과목.filter((x) => !이미.has(x.id));
-  남은.forEach((x) => sel.appendChild(new Option(x.name, x.id)));
-  const 없음 = 남은.length === 0;
-  sel.disabled = 없음;
-  $('#share-mins').disabled = 없음;
-  $('#share-add').disabled = 없음;
-  if (없음) sel.appendChild(new Option('넣을 과목이 없어요', ''));
+  모든과목.filter((x) => !이미.has(x.id))
+    .forEach((x) => box.appendChild(new Option(x.name)));
+}
+
+/* 띄어쓰기와 대소문자를 무시하고 견준다 */
+function 같은이름(a, b) {
+  return (a || '').replace(/\s/g, '').toLowerCase()
+    === (b || '').replace(/\s/g, '').toLowerCase();
 }
 
 function renderShareList() {
@@ -1842,16 +1844,51 @@ async function loadShare(채울까) {
   }
 }
 
-on('#share-add', 'click', () => {
-  const id = $('#share-pick').value;
-  if (!id) return;
-  const 분 = Math.max(5, Number($('#share-mins').value) || 30);
-  const 찾음 = 모든과목.find((x) => x.id === id);
-  if (!찾음) return;
-  넣은과목.push({ ...찾음, minutes: 분 });
+function 과목넣기(과목, 분) {
+  넣은과목.push({ ...과목, minutes: 분 });
+  $('#share-pick').value = '';
   renderShareList();
   renderSharePick();
   renderShareSum();
+}
+
+async function 써서넣기() {
+  const 쓴것 = $('#share-pick').value.trim();
+  if (!쓴것) {
+    showMsg($('#auto-msg'), '과목 이름을 적어 주세요');
+    return;
+  }
+  const 분 = Math.max(5, Number($('#share-mins').value) || 30);
+
+  if (넣은과목.some((x) => 같은이름(x.name, 쓴것))) {
+    showMsg($('#auto-msg'), `'${쓴것}' 은(는) 이미 넣었어요`);
+    return;
+  }
+  const 있는것 = 모든과목.find((x) => 같은이름(x.name, 쓴것));
+  if (있는것) {
+    과목넣기(있는것, 분);
+    showMsg($('#auto-msg'), '');
+    return;
+  }
+
+  // 없는 이름이면 새 과목으로 만들지 물어본다
+  if (!confirm(`'${쓴것}' 과목이 없어요. 새로 만들까요?`)) return;
+  try {
+    const data = await api('/api/subjects', 'POST', { name: 쓴것 });
+    const 새것 = data.items.find((x) => 같은이름(x.name, 쓴것));
+    if (!새것) throw new Error('과목을 만들지 못했어요');
+    rememberSubjects(data.items);
+    모든과목.push({ id: 새것.id, name: 새것.name, rate: null });
+    과목넣기({ id: 새것.id, name: 새것.name, rate: null }, 분);
+    showMsg($('#auto-msg'), `'${새것.name}' 과목을 새로 만들었어요`);
+  } catch (err) {
+    showMsg($('#auto-msg'), err.message);
+  }
+}
+
+on('#share-add', 'click', 써서넣기);
+on('#share-pick', 'keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); 써서넣기(); }
 });
 
 on('#auto-hours', 'change', () => loadShare(false));

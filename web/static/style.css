@@ -1688,7 +1688,18 @@ button.tier-chip { border: 0; cursor: pointer; font-family: inherit; }
   padding-top: 8px;
   border-top: 1px solid var(--card-line);
 }
-.share-add select { flex: 1; min-width: 0; }
+.share-add select,
+.share-add #share-pick { flex: 1; min-width: 0; }
+.share-add #share-pick {
+  padding: 8px 10px;
+  border: 1px solid var(--card-line);
+  border-radius: 10px;
+  background: var(--paper);
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--ink);
+}
+.share-add #share-pick:focus { outline: none; border-color: var(--brand); }
 .share-add .share-min,
 .share-add #share-mins {
   flex: none;
