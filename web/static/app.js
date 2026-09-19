@@ -129,6 +129,8 @@ async function start() {
   }
   applyTheme(me.theme);
   applyDark(me.dark);
+  fillClockPick();      // 시각·시간 고르개는 미리 채워 둔다
+  fillDayPick();        // (카드를 열 때만 채우면 비어 보일 수 있다)
   render();
 }
 
