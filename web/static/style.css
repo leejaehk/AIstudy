@@ -1524,3 +1524,32 @@ button.tier-chip { border: 0; cursor: pointer; font-family: inherit; }
   font-size: 13px;
   color: var(--ink);
 }
+
+/* ── 풀었던 문제 찾기 ─────────────────────────────────── */
+
+.find-card { margin: 16px 24px 0; padding: 16px 18px; display: grid; gap: 10px; }
+#find-word,
+#find-day,
+#find-where {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--card-line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--brand) 3%, var(--mix));
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--ink);
+}
+#find-word:focus,
+#find-day:focus,
+#find-where:focus { outline: none; border-color: var(--brand); background: var(--paper); }
+.find-card .tiny-label { margin: 0; }
+.find-card .btn-add { margin: 0; }
+
+#find-result { margin-top: 6px; }
+.find-solve {
+  flex: none;
+  align-self: center;
+  margin: 0 0 0 10px;
+  padding: 7px 14px;
+}

@@ -479,6 +479,7 @@ function itemUsable(item) {
 
 function renderSubjects() {
   rememberSubjects(usage.subjects);
+  fillFindWhere();
   const counts = (quizData.by_subject || {}).count || {};
   const list = $('#subject-list');
   list.textContent = '';
@@ -893,6 +894,121 @@ $('#quiz-form').addEventListener('submit', async (e) => {
 /* 풀이 진행 */
 
 /* 문제 풀기 안의 세 화면: 과목 고르기 / 그 과목 목록 / 풀이 중 */
+/* ── 풀었던 문제 찾기 ───────────────────────────────────────
+   문제가 쌓이면 과목별 목록을 눈으로 훑어서는 못 찾는다. 문제·정답·해설에서
+   글자를 찾고, 최근에 푼 것을 위에 놓는다.                          */
+
+function fillFindWhere() {
+  const sel = $('#find-where');
+  const keep = sel.value;
+  sel.textContent = '';
+  sel.appendChild(new Option('모든 과목', ''));
+  sel.appendChild(new Option('틀린 문제만', 'wrong'));
+  mySubjects.forEach((s) => sel.appendChild(new Option(s.name, s.id)));
+  sel.value = keep;
+}
+
+function foundRow(item) {
+  const li = document.createElement('li');
+  li.className = 'quiz-item' + (item.wrong ? ' miss' : '');
+
+  const body = document.createElement('div');
+  body.className = 'quiz-body';
+
+  const q = document.createElement('span');
+  q.className = 'q';
+  q.textContent = item.question;
+  body.appendChild(q);
+
+  const a = document.createElement('span');
+  a.className = 'a';
+  a.textContent = `${item.subject_name} · 정답 ${item.answer}`;
+  body.appendChild(a);
+
+  if (item.note) {
+    const n = document.createElement('span');
+    n.className = 'n';
+    n.textContent = item.note;
+    body.appendChild(n);
+  }
+
+  const 기록 = document.createElement('span');
+  기록.className = 'r';
+  기록.textContent = [
+    item.last_at ? `${item.last_at}에 품` : '아직 안 풀었어요',
+    item.tries ? `${item.tries}번 풀어 ${item.misses || 0}번 틀림` : null,
+    item.wrong ? '오답 노트에 있음' : null,
+  ].filter(Boolean).join(' · ');
+  body.appendChild(기록);
+
+  li.appendChild(body);
+
+  const 풀기 = document.createElement('button');
+  풀기.type = 'button';
+  풀기.className = 'btn-sub find-solve';
+  풀기.textContent = '풀기';
+  풀기.addEventListener('click', () => startQuiz([item]));
+  li.appendChild(풀기);
+
+  return li;
+}
+
+function renderFound(data) {
+  const box = $('#find-result');
+  const list = $('#find-list');
+  list.textContent = '';
+  data.items.forEach((item) => list.appendChild(foundRow(item)));
+
+  const 무엇 = [data.q ? `'${data.q}'` : null,
+                data.day ? `${data.day}에 푼 것` : null]
+    .filter(Boolean).join(' · ') || '모든 문제';
+  $('#find-count').textContent = data.total
+    ? `${무엇} — ${data.total}개`
+      + (data.more ? ` (${data.items.length}개만 보임)` : '')
+    : `${무엇} — 없음`;
+  $('#find-empty').hidden = data.total > 0;
+
+  // 날짜를 안 적었을 때, 비슷한 문제도 함께 보여 준다
+  const 비슷 = data.similar || [];
+  const sbox = $('#similar-box');
+  const slist = $('#similar-list');
+  slist.textContent = '';
+  비슷.forEach((item) => slist.appendChild(foundRow(item)));
+  $('#similar-title').textContent = data.total
+    ? `비슷한 문제 ${비슷.length}개`
+    : `꼭 맞는 건 없지만, 비슷한 문제 ${비슷.length}개를 찾았어요`;
+  sbox.hidden = 비슷.length === 0;
+
+  box.hidden = false;
+}
+
+on('#find-form', 'submit', async (e) => {
+  e.preventDefault();
+  const word = $('#find-word').value.trim();
+  const day = $('#find-day').value;
+  const only = $('#find-where').value;
+  if (!word && !day && !only) {
+    showMsg($('#quiz-msg'), '찾을 낱말이나 날짜를 적어 주세요');
+    return;
+  }
+  try {
+    const q = new URLSearchParams();
+    if (word) q.set('q', word);
+    if (day) q.set('day', day);
+    if (only) q.set('only', only);
+    renderFound(await api(`/api/quiz/search?${q}`));
+    showMsg($('#quiz-msg'), '');
+  } catch (err) {
+    showMsg($('#quiz-msg'), err.message);
+  }
+});
+
+on('#find-clear', 'click', () => {
+  $('#find-word').value = '';
+  $('#find-day').value = '';
+  $('#find-result').hidden = true;
+});
+
 function showQuizView(view) {
   $('#quiz-subjects').hidden = view !== 'subjects';
   $('#quiz-home').hidden = view !== 'home';

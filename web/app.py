@@ -901,6 +901,7 @@ class Quiz:
             "wrong": False,   # 마지막에 틀렸는지 = 오답 노트에 있는지
             "tries": 0,
             "misses": 0,
+            "last_at": None,      # 마지막으로 푼 날 (나중에 찾을 때 쓴다)
         }
         items.append(item)
         self._save(user, items)
@@ -956,6 +957,7 @@ class Quiz:
                 continue
             correct = same_answer(given, item.get("answer"))
             item["tries"] = item.get("tries", 0) + 1
+            item["last_at"] = today.isoformat()
             was_wrong = bool(item.get("wrong"))
             graduated = False
 
@@ -2293,6 +2295,133 @@ def get_quiz(user):
     if subject and not subjects.find(user, subject):
         return jsonify({"error": "없는 과목입니다"}), 404
     return jsonify(quiz_payload(user, subject))
+
+
+SEARCH_MAX = 50        # 한 번에 보여 줄 결과 수
+SIMILAR_MAX = 20       # 비슷한 문제를 몇 개까지 보여 줄지
+
+WORD_RE = re.compile(r"[가-힣]{2,}|[A-Za-z]{2,}|\d+")
+
+
+def words_of(text):
+    """글에서 뜻이 있을 만한 낱말만 골라 낸다."""
+    return set(WORD_RE.findall((text or "").lower()))
+
+
+def item_text(item):
+    return " ".join([item.get("question") or "", item.get("answer") or "",
+                     item.get("note") or ""])
+
+
+def dress(item, names):
+    """화면에 보낼 꼴로 다듬는다.
+
+    복습 기능이 생기기 전에 만든 문제에는 last_at 같은 칸이 없으므로, 없으면
+    없는 대로 빈 값을 넣어 화면이 걸리지 않게 한다.
+    """
+    return {**item,
+            "subject_name": names.get(item.get("subject"), "지운 과목"),
+            "main_name": names.get(item.get("main")),
+            "last_at": item.get("last_at"),
+            "tries": item.get("tries", 0),
+            "misses": item.get("misses", 0),
+            "wrong": bool(item.get("wrong"))}
+
+
+def like_score(word_set, item, hint_subjects):
+    """이 문제가 찾는 것과 얼마나 닮았는지. 0 이면 안 닮은 것이다.
+
+    낱말이 겹치거나 같은 과목으로 보일 때만 '비슷하다'고 봅니다. 그렇지 않은데
+    틀렸다는 이유만으로 딸려 나오면, 엉뚱한 과목 문제가 섞여 쓸모가 없습니다.
+    """
+    같은낱말 = word_set & words_of(item_text(item))
+    점수 = len(같은낱말) * 2
+    if (item.get("main") or item.get("subject")) in hint_subjects:
+        점수 += 1                      # 글로 미루어 같은 과목으로 보이면
+    if not 점수:
+        return 0                       # 닮은 구석이 없다
+    if item.get("wrong"):
+        점수 += 0.5                    # 닮은 것들 중에서는 틀렸던 것을 앞으로
+    return 점수
+
+
+def search_quiz(user, word, only=None, day=None):
+    """쌓인 문제에서 찾는다.
+
+    날짜를 적으면 그 날 푼 것만 봅니다. 날짜가 기억나지 않아 비워 두면 낱말로
+    찾고, 꼭 맞는 것이 적을 때는 **비슷한 문제**도 함께 돌려줍니다.
+    아무것도 적지 않으면 최근에 푼 순서로 보여 줍니다.
+    """
+    names = {sub["id"]: sub["name"] for sub in user_subjects(user)}
+    every = quiz.all(user)
+
+    def 거르기(items):
+        if only == "wrong":
+            return [i for i in items if i.get("wrong")]
+        if only:
+            return [i for i in items if i.get("subject") == only]
+        return items
+
+    고른것 = 거르기(every)
+    if day:
+        고른것 = [i for i in 고른것 if i.get("last_at") == day]
+
+    needle = (word or "").replace(" ", "").lower()
+    if needle:
+        맞는것 = [i for i in 고른것
+                  if needle in item_text(i).replace(" ", "").lower()]
+    else:
+        맞는것 = 고른것                # 낱말 없이 날짜만, 또는 그냥 둘러보기
+
+    맞는것.sort(key=lambda i: (i.get("last_at") or "", i.get("id")),
+                reverse=True)
+
+    # 날짜를 안 적었을 때만 비슷한 것을 찾는다 (날짜를 적었으면 그 날 것이 답)
+    비슷한것 = []
+    if needle and not day:
+        고른 = set(words_of(word))
+        hint = guess_subject(word, user_subjects(user))
+        hint_subjects = {hint["id"]} if hint else set()
+        이미 = {i["id"] for i in 맞는것}
+        매긴것 = []
+        for item in 거르기(every):
+            if item["id"] in 이미:
+                continue
+            점수 = like_score(고른, item, hint_subjects)
+            if 점수 > 0:
+                매긴것.append((점수, item))
+        매긴것.sort(key=lambda x: (-x[0], x[1].get("last_at") or ""))
+        비슷한것 = [i for _, i in 매긴것[:SIMILAR_MAX]]
+
+    return ([dress(i, names) for i in 맞는것],
+            [dress(i, names) for i in 비슷한것])
+
+
+@app.get("/api/quiz/search")
+@login_required
+def get_quiz_search(user):
+    """쌓인 문제에서 찾기. 과목을 고르지 않아도 전체에서 찾습니다."""
+    word = request.args.get("q", "")
+    only = request.args.get("only") or None
+    day = request.args.get("day") or None
+    if only and only != "wrong" and not subjects.find(user, only):
+        return jsonify({"error": "없는 과목입니다"}), 400
+    if day:
+        try:
+            day = valid_date(day)
+        except ValueError:
+            return jsonify({"error": "날짜 형식이 올바르지 않습니다"}), 400
+
+    맞는것, 비슷한것 = search_quiz(user, word, only, day)
+    return jsonify({
+        "q": word,
+        "only": only,
+        "day": day,
+        "total": len(맞는것),
+        "items": 맞는것[:SEARCH_MAX],
+        "more": max(0, len(맞는것) - SEARCH_MAX),
+        "similar": 비슷한것,
+    })
 
 
 @app.post("/api/quiz")
