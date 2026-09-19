@@ -497,10 +497,13 @@
                 <input id="share-pick" type="text" maxlength="20"
                        autocomplete="off"
                        placeholder="과목 이름" aria-label="넣을 과목">
-                <input id="share-mins" type="number" min="5" max="720" step="5"
-                       value="30" aria-label="몇 분">
-                <span class="pick-unit">분</span>
-                <button type="button" class="btn-sub" id="share-add">넣기</button>
+                <div class="share-add-time">
+                  <select id="share-hours" aria-label="시간"></select>
+                  <span class="pick-unit">시간</span>
+                  <select id="share-mins" aria-label="분"></select>
+                  <span class="pick-unit">분</span>
+                  <button type="button" class="btn-sub" id="share-add">넣기</button>
+                </div>
               </div>
 
               <p class="tiny-label" id="share-sum"></p>

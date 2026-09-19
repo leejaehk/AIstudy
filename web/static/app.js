@@ -1707,16 +1707,20 @@ function pickedClock() {
 let 넣은과목 = [];        // [{id, name, minutes, rate}]
 let 모든과목 = [];        // 고를 수 있는 과목 전부
 
-function fillDayPick() {
-  const 시 = $('#auto-hours');
-  const 분 = $('#auto-mins');
-  if (!시 || 시.options.length) return;
+/* 시간·분 고르개를 채운다 */
+function fillHourMin(시, 분, 기본시, 기본분) {
+  if (!시 || !분 || 시.options.length) return;
   for (let i = 0; i <= 12; i += 1) 시.appendChild(new Option(i, i));
   for (let i = 0; i < 60; i += 5) {
     분.appendChild(new Option(String(i).padStart(2, '0'), i));
   }
-  시.value = 2;           // 2시간
-  분.value = 0;
+  시.value = 기본시 || 0;
+  분.value = 기본분 || 0;
+}
+
+function fillDayPick() {
+  fillHourMin($('#auto-hours'), $('#auto-mins'), 2, 0);     // 하루 2시간
+  fillHourMin($('#share-hours'), $('#share-mins'), 0, 30);  // 과목 30분
 }
 
 function pickedDayMinutes() {
@@ -1748,23 +1752,29 @@ function renderShareList() {
       ? '아직 안 풂' : `정답률 ${sub.rate}%`;
     li.appendChild(rate);
 
-    const num = document.createElement('input');
-    num.type = 'number';
-    num.className = 'share-min';
-    num.min = 5;
-    num.max = 720;
-    num.step = 5;
-    num.value = sub.minutes;
-    num.addEventListener('input', () => {
-      sub.minutes = Math.max(0, Number(num.value) || 0);
+    // 시간·분을 따로 고른다
+    const 때 = document.createElement('div');
+    때.className = 'share-time';
+    const 시 = document.createElement('select');
+    시.setAttribute('aria-label', `${sub.name} 시간`);
+    const 분 = document.createElement('select');
+    분.setAttribute('aria-label', `${sub.name} 분`);
+    fillHourMin(시, 분, Math.floor(sub.minutes / 60),
+                (Math.round((sub.minutes % 60) / 5) * 5) % 60);
+    const 고침 = () => {
+      sub.minutes = Number(시.value) * 60 + Number(분.value);
       renderShareSum();
-    });
-    li.appendChild(num);
-
-    const unit = document.createElement('span');
-    unit.className = 'pick-unit';
-    unit.textContent = '분';
-    li.appendChild(unit);
+    };
+    시.addEventListener('change', 고침);
+    분.addEventListener('change', 고침);
+    const 시글 = document.createElement('span');
+    시글.className = 'pick-unit';
+    시글.textContent = '시간';
+    const 분글 = document.createElement('span');
+    분글.className = 'pick-unit';
+    분글.textContent = '분';
+    때.append(시, 시글, 분, 분글);
+    li.appendChild(때);
 
     const del = document.createElement('button');
     del.type = 'button';
@@ -1845,7 +1855,12 @@ async function 써서넣기() {
     showMsg($('#auto-msg'), '과목 이름을 적어 주세요');
     return;
   }
-  const 분 = Math.max(5, Number($('#share-mins').value) || 30);
+  const 분 = Number($('#share-hours').value) * 60
+    + Number($('#share-mins').value);
+  if (분 < 5) {
+    showMsg($('#auto-msg'), '한 과목은 5분 이상으로 정해 주세요');
+    return;
+  }
 
   if (넣은과목.some((x) => 같은이름(x.name, 쓴것))) {
     showMsg($('#auto-msg'), `'${쓴것}' 은(는) 이미 넣었어요`);
