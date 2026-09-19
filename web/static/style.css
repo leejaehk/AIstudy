@@ -1502,9 +1502,9 @@ button.tier-chip { border: 0; cursor: pointer; font-family: inherit; }
   color: var(--brand-deep);
 }
 
-#auto-card .exam-body { display: grid; gap: 10px; }
-#auto-card select,
-#auto-card input[type="time"] {
+#exam-card .exam-body { display: grid; gap: 10px; }
+#exam-card select,
+#exam-card input[type="time"] {
   width: 100%;
   padding: 11px;
   border: 1px solid var(--card-line);
@@ -1514,7 +1514,7 @@ button.tier-chip { border: 0; cursor: pointer; font-family: inherit; }
   font-size: 14px;
   color: var(--ink);
 }
-#auto-card .account-buttons .btn-sub { flex: 1; margin: 0; }
+#exam-card .account-buttons .btn-sub { flex: 1; margin: 0; }
 
 #dark-pick {
   padding: 7px 10px;

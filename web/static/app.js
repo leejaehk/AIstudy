@@ -1281,27 +1281,6 @@ async function loadPlans() {
    약한 과목(정답률이 낮고 오답이 많은 과목)에 시간을 더 준다. 시험일까지
    되풀이되는 시간표를 만들고, 시험이 지나면 저절로 사라진다.        */
 
-on('#auto-make', 'click', async (e) => {
-  const btn = e.currentTarget;
-  btn.disabled = true;
-  try {
-    const data = await api('/api/plans/auto', 'POST', {
-      minutes: Number($('#auto-minutes').value),
-      start: $('#auto-start').value || '19:00',
-      repeat: $('#auto-repeat').value,
-    });
-    renderPlans(data);
-    const 몫 = (data.made || [])
-      .map((m) => `${m.name} ${m.minutes}분`).join(' · ');
-    showMsg($('#auto-msg'),
-            `시험까지 ${data.days_left}일 — ${몫} 로 짰어요`);
-  } catch (err) {
-    showMsg($('#auto-msg'), err.message);
-  } finally {
-    btn.disabled = false;
-  }
-});
-
 on('#auto-clear', 'click', async () => {
   if (!confirm('자동으로 짠 계획을 지울까요? 직접 적은 계획은 그대로 둡니다.')) {
     return;
@@ -1476,6 +1455,13 @@ function doneHeading(count) {
 
 function renderDday(exam) {
   const el = $('#dday');
+
+  // 이미 정해 둔 시험일을 칸에 채워 둔다 (고치기 쉽게)
+  if (exam && !$('#exam-date').value) {
+    $('#exam-title').value = exam.title || '';
+    $('#exam-date').value = exam.date || '';
+  }
+
   if (!exam || exam.days_left === undefined) {
     el.hidden = true;
     return;
@@ -1592,15 +1578,51 @@ $('#plan-form').addEventListener('submit', async (e) => {
   }
 });
 
-$('#exam-save').addEventListener('click', async () => {
+/* 시험일을 정하면서 계획까지 한 번에 짠다.
+   따로 두었더니 시험일만 정하고 계획 짜기를 잊는 일이 생겼다. */
+
+on('#exam-plan', 'change', (e) => {
+  $('#exam-plan-box').hidden = !e.target.checked;
+});
+
+$('#exam-save').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  const 날 = $('#exam-date').value;
+  const 계획도 = $('#exam-plan').checked;
+  btn.disabled = true;
+  showMsg($('#auto-msg'), '');
   try {
-    renderPlans(await api('/api/exam', 'PUT', {
+    let data = await api('/api/exam', 'PUT', {
       title: $('#exam-title').value.trim() || '시험',
-      date: $('#exam-date').value || null,
-    }));
+      date: 날 || null,
+    });
+    renderPlans(data);
     showPlanError('');
+
+    if (!날) {
+      showMsg($('#auto-msg'), data.cleared
+        ? '시험일을 지웠어요. 시험까지 짜 둔 계획도 함께 치웠습니다'
+        : '시험일을 지웠어요');
+      return;
+    }
+    if (!계획도) {
+      showMsg($('#auto-msg'), '시험일을 저장했어요');
+      return;
+    }
+    data = await api('/api/plans/auto', 'POST', {
+      minutes: Number($('#auto-minutes').value),
+      start: $('#auto-start').value || '19:00',
+      repeat: $('#auto-repeat').value,
+    });
+    renderPlans(data);
+    const 몫 = (data.made || [])
+      .map((m) => `${m.name} ${m.minutes}분`).join(' · ');
+    showMsg($('#auto-msg'),
+            `시험까지 ${data.days_left}일 — ${몫} 로 짰어요`);
   } catch (err) {
-    showPlanError(err.message);
+    showMsg($('#auto-msg'), err.message);
+  } finally {
+    btn.disabled = false;
   }
 });
 

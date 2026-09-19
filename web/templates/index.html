@@ -444,38 +444,41 @@
         아직 계획이 없어요.<br>위에 적어서 추가해 보세요.
       </p>
 
-      <details class="card exam-card">
-        <summary>시험일 설정</summary>
+      <details class="card exam-card" id="exam-card">
+        <summary>시험일 정하고 계획 짜기</summary>
         <div class="exam-body">
           <input id="exam-title" type="text" maxlength="20"
                  placeholder="예: 중간고사" autocomplete="off">
           <input id="exam-date" type="date" aria-label="시험 날짜">
-          <button class="btn-sub" id="exam-save" type="button">저장</button>
-        </div>
-      </details>
 
-      <details class="card exam-card" id="auto-card">
-        <summary>시험까지 계획 짜 주기</summary>
-        <div class="exam-body">
-          <p class="tiny-label">약한 과목에 시간을 더 줍니다.
-            시험일까지 되풀이되는 시간표가 만들어지고, 시험이 지나면
-            저절로 사라집니다.</p>
-          <div class="add-row">
-            <select id="auto-minutes" aria-label="하루 공부 시간">
-              <option value="60">하루 1시간</option>
-              <option value="90">하루 1시간 30분</option>
-              <option value="120" selected>하루 2시간</option>
-              <option value="180">하루 3시간</option>
-              <option value="240">하루 4시간</option>
+          <label class="keep">
+            <input id="exam-plan" type="checkbox" checked>
+            <span>시험까지 공부 계획도 함께 짜기</span>
+          </label>
+
+          <div id="exam-plan-box">
+            <div class="add-row">
+              <select id="auto-minutes" aria-label="하루 공부 시간">
+                <option value="60">하루 1시간</option>
+                <option value="90">하루 1시간 30분</option>
+                <option value="120" selected>하루 2시간</option>
+                <option value="180">하루 3시간</option>
+                <option value="240">하루 4시간</option>
+              </select>
+              <input id="auto-start" type="time" value="19:00"
+                     aria-label="시작 시각">
+            </div>
+            <select id="auto-repeat" aria-label="언제">
+              <option value="daily">매일</option>
+              <option value="weekday">평일만 (월~금)</option>
             </select>
-            <input id="auto-start" type="time" value="19:00" aria-label="시작 시각">
+            <p class="tiny-label">약한 과목에 시간을 더 줍니다.
+              시험일까지 되풀이되는 시간표가 만들어지고, 시험이 지나면
+              저절로 사라집니다.</p>
           </div>
-          <select id="auto-repeat" aria-label="언제">
-            <option value="daily">매일</option>
-            <option value="weekday">평일만 (월~금)</option>
-          </select>
+
           <div class="account-buttons">
-            <button class="btn-sub" id="auto-make" type="button">계획 짜기</button>
+            <button class="btn-sub" id="exam-save" type="button">저장</button>
             <button class="btn-sub off" id="auto-clear" type="button">짠 계획 지우기</button>
           </div>
           <p class="plan-msg" id="auto-msg" hidden></p>

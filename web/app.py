@@ -3024,7 +3024,13 @@ def put_exam(user):
     except ValueError:
         return jsonify({"error": "날짜 형식이 올바르지 않습니다"}), 400
     plans.set_exam(user, (body.get("title") or "시험").strip(), date)
-    return jsonify(plans_payload(user))
+    if not date:
+        # 시험이 없어졌으니 '시험까지' 짜 둔 계획도 함께 치운다.
+        # 직접 적은 계획은 건드리지 않는다.
+        plans.clear_auto(user)
+    data = plans_payload(user)
+    data["cleared"] = not date
+    return jsonify(data)
 
 
 # --- 아무도 안 보고 있으면 서버를 끈다 ---------------------------------------
